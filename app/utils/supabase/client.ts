@@ -1,15 +1,15 @@
-import { createBrowserClient } from '@supabase/ssr'
+import { createBrowserClient } from "@supabase/ssr";
 
 export function createClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn('Supabase env variables are missing. Client will not be initialized correctly.')
+  if (!url || !key) {
+    console.error("Supabase environment variables are missing on the client side!");
   }
 
   return createBrowserClient(
-    supabaseUrl || '',
-    supabaseAnonKey || ''
-  )
+    url || "https://placeholder-project.supabase.co",
+    key || "placeholder-key"
+  );
 }

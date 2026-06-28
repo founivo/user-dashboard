@@ -12,10 +12,16 @@ export default async function Home(props: {
     return <DashboardClient />;
   }
 
-  const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
+  let user = null;
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getUser();
+    user = data?.user || null;
+  } catch (err) {
+    console.error("Auth check failed server-side:", err);
+  }
 
-  if (error || !user) {
+  if (!user) {
     const signInUrl = process.env.NEXT_PUBLIC_MAIN_APP_URL
       ? `${process.env.NEXT_PUBLIC_MAIN_APP_URL}/sign-in`
       : "http://localhost:3000/sign-in";
