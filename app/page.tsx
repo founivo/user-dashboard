@@ -6,19 +6,13 @@ export default async function Home(props: {
   searchParams: Promise<{ access_token?: string; refresh_token?: string }>;
 }) {
   const searchParams = await props.searchParams;
-  const supabase = await createClient();
 
+  // Bypass server-side check if login tokens are present in URL (client will process them)
   if (searchParams.access_token && searchParams.refresh_token) {
-    try {
-      await supabase.auth.setSession({
-        access_token: searchParams.access_token,
-        refresh_token: searchParams.refresh_token,
-      });
-    } catch (err) {
-      console.error("Failed to set session on server side:", err);
-    }
+    return <DashboardClient />;
   }
 
+  const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
 
   if (error || !user) {
