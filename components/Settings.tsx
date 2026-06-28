@@ -1,7 +1,101 @@
 "use client";
-import { Bell, Shield, User, Trash2, CreditCard, Save } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Bell, Shield, User, Trash2, CreditCard, Save, Loader2 } from "lucide-react";
+import { createClient } from "../utils/supabase/client";
 
 export default function Settings() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // States
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [location, setLocation] = useState("");
+  const [industry, setIndustry] = useState("");
+  const [purpose, setPurpose] = useState("");
+
+  const supabase = createClient();
+
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setUserId(user.id);
+          setEmail(user.email || "");
+
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("id", user.id)
+            .single();
+
+          if (profile) {
+            setName(profile.full_name || "");
+          }
+
+          const { data: pref } = await supabase
+            .from("user_preferences")
+            .select("*")
+            .eq("id", user.id)
+            .single();
+
+          if (pref) {
+            setLocation(pref.location || "");
+            setIndustry(pref.industry || "");
+            setPurpose(pref.purpose || "");
+          }
+        }
+      } catch (err) {
+        console.error("Error loading settings:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadSettings();
+  }, []);
+
+  const handleSave = async () => {
+    if (!userId) return;
+    setSaving(true);
+    try {
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ full_name: name })
+        .eq("id", userId);
+
+      if (profileError) throw profileError;
+
+      const { error: prefError } = await supabase
+        .from("user_preferences")
+        .upsert({
+          id: userId,
+          location,
+          industry,
+          purpose,
+        });
+
+      if (prefError) throw prefError;
+
+      alert("Settings saved successfully!");
+    } catch (err) {
+      console.error("Error saving settings:", err);
+      alert("Failed to save settings. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "400px", gap: 10 }}>
+        <Loader2 className="animate-spin" size={24} style={{ color: "var(--primary)" }} />
+        <span style={{ fontSize: 14, color: "var(--text-muted)", fontWeight: 500 }}>Loading settings...</span>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 640 }}>
       <div>
@@ -19,18 +113,41 @@ export default function Settings() {
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           {[
-            { label: "Full Name", val: "Zara Ahmed" },
-            { label: "Email", val: "zara@example.com" },
-            { label: "Location", val: "Karachi, PK" },
-            { label: "Startup Stage", val: "Idea Stage" },
+            { label: "Full Name", val: name, set: setName, disabled: false },
+            { label: "Email", val: email, set: () => {}, disabled: true },
+            { label: "Location", val: location, set: setLocation, disabled: false },
+            { label: "Preferred Industry", val: industry, set: setIndustry, disabled: false },
+            { label: "Goal / Purpose", val: purpose, set: setPurpose, disabled: false },
           ].map((f, i) => (
-            <div key={i}>
+            <div key={i} style={{ gridColumn: f.label === "Goal / Purpose" ? "span 2" : "auto" }}>
               <div style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>{f.label}</div>
-              <input className="input-field" defaultValue={f.val} style={{ fontSize: 13 }} />
+              <input 
+                className="input-field" 
+                value={f.val} 
+                onChange={e => f.set(e.target.value)} 
+                disabled={f.disabled}
+                style={{ 
+                  fontSize: 13, 
+                  background: f.disabled ? "var(--bg-soft)" : "white", 
+                  cursor: f.disabled ? "not-allowed" : "text",
+                  color: f.disabled ? "var(--text-muted)" : "var(--text)"
+                }} 
+              />
             </div>
           ))}
         </div>
-        <button className="btn-primary" style={{ marginTop: 18, fontSize: 13 }}><Save size={14} />Save Changes</button>
+        <button 
+          onClick={handleSave} 
+          className="btn-primary" 
+          style={{ marginTop: 18, fontSize: 13 }}
+          disabled={saving}
+        >
+          {saving ? (
+            <><Loader2 size={14} className="animate-spin" /> Saving...</>
+          ) : (
+            <><Save size={14} />Save Changes</>
+          )}
+        </button>
       </div>
 
       {/* Notifications */}
