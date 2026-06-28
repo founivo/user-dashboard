@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Sidebar from "./Sidebar";
 import Discover from "./Discover";
 import FindFounders from "./FindFounders";
@@ -11,6 +11,17 @@ import Notifications from "./Notifications";
 
 export default function DashboardClient() {
   const [activeTab, setActiveTab] = useState("discover");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("access_token")) {
+        url.searchParams.delete("access_token");
+        url.searchParams.delete("refresh_token");
+        window.history.replaceState({}, document.title, url.pathname + url.search);
+      }
+    }
+  }, []);
 
   const content: Record<string, React.ReactNode> = {
     discover: <Discover />,

@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { Bell, Shield, User, Trash2, CreditCard, Save, Loader2 } from "lucide-react";
-import { createClient } from "../utils/supabase/client";
+import { createClient } from "@/app/utils/supabase/client";
 
 export default function Settings() {
   const [loading, setLoading] = useState(true);
