@@ -1,9 +1,11 @@
 "use client";
+import { useState, useEffect } from "react";
 import { 
   Search, TrendingUp, Star, Zap, ArrowRight, Eye, 
   MessageSquare, Bookmark, ChevronRight, CheckCircle, 
-  MapPin, Bot, CreditCard, Activity, BookOpen, Settings, Link as LinkIcon 
+  MapPin, Bot, CreditCard, Activity, BookOpen, Settings, Link as LinkIcon, Loader2
 } from "lucide-react";
+import { createClient } from "@/app/utils/supabase/client";
 
 const featured = [
   { 
@@ -48,6 +50,40 @@ const categories = [
 ];
 
 export default function Discover() {
+  const [userName, setUserName] = useState("");
+  const [profileLoading, setProfileLoading] = useState(true);
+  const supabase = createClient();
+
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("id", user.id)
+            .single();
+          if (profile?.full_name) {
+            setUserName(profile.full_name.split(" ")[0]);
+          }
+        }
+      } catch (err) {
+        console.error("Error loading profile:", err);
+      } finally {
+        setProfileLoading(false);
+      }
+    }
+    loadProfile();
+  }, [supabase]);
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 17) return "Good afternoon";
+    return "Good evening";
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
       {/* Hero banner */}
@@ -60,7 +96,7 @@ export default function Discover() {
             <span style={{ fontSize: 12, color: "white", fontWeight: 600 }}>518 verified founders live</span>
           </div>
           <h1 style={{ fontSize: 32, fontWeight: 800, color: "white", letterSpacing: "-0.5px", marginBottom: 12, lineHeight: 1.2 }}>
-            Connect with founders<br />who've been there.
+            {getGreeting()}, {profileLoading ? "..." : userName || "there"} 👋
           </h1>
           <p style={{ fontSize: 15, color: "rgba(255,255,255,0.85)", marginBottom: 28, maxWidth: 460, lineHeight: 1.6 }}>
             Skip the guesswork. Meet verified startup founders for real advice, mentorship, and strategic connections.
