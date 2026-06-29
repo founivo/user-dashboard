@@ -1,6 +1,7 @@
 import { createClient } from "./utils/supabase/server";
 import { redirect } from "next/navigation";
 import DashboardClient from "@/components/DashboardClient";
+import { getMainAppUrl } from "./lib/config";
 
 export default async function Home(props: {
   searchParams: Promise<{ access_token?: string; refresh_token?: string }>;
@@ -22,10 +23,7 @@ export default async function Home(props: {
   }
 
   if (!user) {
-    const signInUrl = process.env.NEXT_PUBLIC_MAIN_APP_URL
-      ? `${process.env.NEXT_PUBLIC_MAIN_APP_URL}/sign-in`
-      : "http://localhost:3000/sign-in";
-    redirect(signInUrl);
+    redirect(`${getMainAppUrl()}/sign-in`);
   }
 
   return <DashboardClient />;
