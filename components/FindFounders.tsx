@@ -1,13 +1,51 @@
 "use client";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Search, Filter, Star, Eye, MessageSquare, Bookmark, MapPin, CheckCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { DashboardFounder } from "@/app/lib/googleSheets";
+import { createClient } from "@/app/utils/supabase/client";
 
 // Helper to generate URL-friendly slugs/usernames from name
 export function getSlug(name: string): string {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 }
+
+interface ProfileMetadata {
+  personal_photo?: string;
+  startup_logo?: string;
+  fees_30m?: string;
+  fees_1h?: string;
+  fees_custom_min?: string;
+  fees_custom_val?: string;
+  skills?: string[];
+  
+  startup_name?: string;
+  startup_stage?: string;
+  startup_category?: string;
+  startup_location?: string;
+  startup_team_size?: string;
+  startup_funding?: string;
+  startup_bio?: string;
+  startup_linkedin?: string;
+  startup_twitter?: string;
+  startup_website?: string;
+}
+
+const parseBioAndMetadata = (rawBio: string): { bioText: string; metadata: ProfileMetadata } => {
+  const marker = "\n\n---METADATA---\n";
+  if (rawBio && rawBio.includes(marker)) {
+    const parts = rawBio.split(marker);
+    const bioText = parts[0];
+    try {
+      const metadata = JSON.parse(parts[1]);
+      return { bioText, metadata };
+    } catch (e) {
+      console.error("Error parsing profile metadata:", e);
+      return { bioText: rawBio, metadata: {} };
+    }
+  }
+  return { bioText: rawBio || "", metadata: {} };
+};
 
 const INITIAL_MOCK_FOUNDERS: DashboardFounder[] = [
   { name: "Aisha Malik", role: "CEO & Co-founder", company: "NovaTech AI", industry: "AI/ML", stage: "Series A", location: "San Francisco", tags: ["AI/ML", "SaaS", "B2B"], avatar: "AM", rating: 4.9, views: 284, meetings: 32, available: true, verified: true, bio: "Built and scaled 2 AI startups. Ex-Google. Passionate about helping founders navigate product-market fit.", email: "aisha@novatech.io", linkedin: "https://linkedin.com/in/aishamalik", companywebsite: "https://novatech.io" },
@@ -31,27 +69,79 @@ export default function FindFounders() {
   const [foundersList, setFoundersList] = useState<DashboardFounder[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const supabase = createClient();
+
   useEffect(() => {
     const sheetUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_CSV_URL;
-    if (!sheetUrl) {
-      setFoundersList(INITIAL_MOCK_FOUNDERS);
-      return;
-    }
 
     const loadFounders = async () => {
       setLoading(true);
+      let sheetsFounders: DashboardFounder[] = [];
+      let dbMappedFounders: DashboardFounder[] = [];
+
+      // 1. Fetch live founder_profiles from Supabase
       try {
-        const { fetchFoundersFromGoogleSheet } = await import("@/app/lib/googleSheets");
-        const data = await fetchFoundersFromGoogleSheet(sheetUrl);
-        if (data && data.length > 0) {
-          setFoundersList(data);
+        const { data: dbFounders } = await supabase
+          .from("founder_profiles")
+          .select("*");
+        
+        if (dbFounders) {
+          dbMappedFounders = dbFounders.map((f: any) => {
+            const { bioText, metadata: parsed } = parseBioAndMetadata(f.bio || "");
+            return {
+              name: f.full_name,
+              role: f.role || "Founder",
+              company: f.company || parsed.startup_name || "Stealth Startup",
+              industry: parsed.startup_category || f.category || "AI/ML",
+              stage: parsed.startup_stage || "Seed",
+              location: parsed.startup_location || "Pakistan",
+              tags: parsed.skills || ["Founder", "Tech Startup"],
+              avatar: parsed.personal_photo || f.full_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
+              rating: 4.9,
+              views: 142,
+              meetings: 0,
+              available: true,
+              verified: true,
+              bio: bioText,
+              email: "founder-contact@founivo.io",
+              linkedin: f.linkedin || parsed.startup_linkedin || "",
+              companywebsite: f.website || parsed.startup_website || ""
+            };
+          });
         }
       } catch (err) {
-        console.error("Failed to load founders from Google Sheet, falling back to local mock data.", err);
-        setFoundersList(INITIAL_MOCK_FOUNDERS);
-      } finally {
-        setLoading(false);
+        console.error("Failed to query live database profiles:", err);
       }
+
+      // 2. Fetch mock founders from Google Sheet or Local Backup
+      try {
+        if (sheetUrl) {
+          const { fetchFoundersFromGoogleSheet } = await import("@/app/lib/googleSheets");
+          const data = await fetchFoundersFromGoogleSheet(sheetUrl);
+          if (data && data.length > 0) {
+            sheetsFounders = data;
+          }
+        } else {
+          sheetsFounders = INITIAL_MOCK_FOUNDERS;
+        }
+      } catch (err) {
+        console.error("Failed to load Google Sheet, using local mock data.", err);
+        sheetsFounders = INITIAL_MOCK_FOUNDERS;
+      }
+
+      // 3. Merge & Deduplicate (Preclude Sheets profiles if name matches a live DB record)
+      const mergedList = [...dbMappedFounders];
+      
+      sheetsFounders.forEach(sf => {
+        const nameSlug = getSlug(sf.name);
+        const exists = dbMappedFounders.some(dbf => getSlug(dbf.name) === nameSlug);
+        if (!exists) {
+          mergedList.push(sf);
+        }
+      });
+
+      setFoundersList(mergedList);
+      setLoading(false);
     };
 
     loadFounders();
@@ -62,12 +152,16 @@ export default function FindFounders() {
       f.name.toLowerCase().includes(search.toLowerCase()) || 
       f.company.toLowerCase().includes(search.toLowerCase()) || 
       f.tags.some(t => t.toLowerCase().includes(search.toLowerCase()));
+    
+    // Support sub-matching for dropdowns
     const matchIndustry = industry === "All" || f.industry.toLowerCase().includes(industry.toLowerCase());
     const matchStage = stage === "All Stages" || f.stage.toLowerCase().includes(stage.toLowerCase());
     const matchLocation = location === "All Locations" || 
       f.location.toLowerCase().includes(location.toLowerCase()) ||
       (location === "United States" && (f.location.toLowerCase().includes("usa") || f.location.toLowerCase().includes("united states") || f.location.toLowerCase().includes("san francisco") || f.location.toLowerCase().includes("new york"))) ||
-      (location === "United Kingdom" && (f.location.toLowerCase().includes("uk") || f.location.toLowerCase().includes("united kingdom") || f.location.toLowerCase().includes("london")));
+      (location === "United Kingdom" && (f.location.toLowerCase().includes("uk") || f.location.toLowerCase().includes("united kingdom") || f.location.toLowerCase().includes("london"))) ||
+      (location === "Pakistan" && (f.location.toLowerCase().includes("pakistan") || f.location.toLowerCase().includes("karachi") || f.location.toLowerCase().includes("lahore") || f.location.toLowerCase().includes("islamabad")));
+    
     return matchSearch && matchIndustry && matchStage && matchLocation;
   });
 
@@ -75,6 +169,7 @@ export default function FindFounders() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }} className="fade-in">
+      
       {/* Title */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
         <div>
@@ -84,7 +179,7 @@ export default function FindFounders() {
           </p>
         </div>
         {loading && (
-          <Loader2 className="animate-spin" color="var(--primary)" size={20} />
+          <Loader2 className="animate-spin text-emerald-600" color="var(--primary)" size={20} />
         )}
       </div>
 
@@ -192,8 +287,26 @@ export default function FindFounders() {
         {filtered.map((f, i) => (
           <div key={i} className="founder-compact-card">
             <div style={{ display: "flex", gap: 12, alignItems: "start" }}>
+              
+              {/* Circular Avatar / Base64 photo handler */}
               <div style={{ position: "relative", flexShrink: 0 }}>
-                <div className="avatar" style={{ width: 44, height: 44, fontSize: 14, background: "linear-gradient(135deg, var(--primary), var(--primary-light))" }}>{f.avatar}</div>
+                <div 
+                  className="avatar" 
+                  style={{ 
+                    width: 44, 
+                    height: 44, 
+                    fontSize: 14, 
+                    background: "linear-gradient(135deg, var(--primary), var(--primary-light))",
+                    position: "relative",
+                    overflow: "hidden"
+                  }}
+                >
+                  {f.avatar && (f.avatar.startsWith("data:image") || f.avatar.startsWith("http")) ? (
+                    <img src={f.avatar} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt={f.name} />
+                  ) : (
+                    f.avatar
+                  )}
+                </div>
                 {f.available && <div style={{ position: "absolute", bottom: 0, right: 0, width: 12, height: 12, background: "var(--primary)", borderRadius: "50%", border: "2px solid white" }} />}
               </div>
 
