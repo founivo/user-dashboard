@@ -3,11 +3,13 @@ import React, { useState, useEffect, use } from "react";
 import { 
   ArrowLeft, MapPin, CheckCircle, Star, Mail, Globe, 
   Copy, Check, Loader2, Clock, Calendar, CheckCircle2, 
-  ExternalLink, ChevronRight, MessageSquare, AlertCircle, Briefcase, Building, Sparkles, User
+  ExternalLink, ChevronRight, MessageSquare, AlertCircle, Briefcase, Building, Sparkles, User,
+  Menu, X
 } from "lucide-react";
 import Link from "next/link";
 import { DashboardFounder } from "@/app/lib/googleSheets";
 import { createClient } from "@/app/utils/supabase/client";
+import Sidebar from "../../../components/Sidebar";
 
 // Helper to generate URL-friendly slugs/usernames from name
 function getSlug(name: string): string {
@@ -41,7 +43,17 @@ const GlobeLogo = ({ size = 16 }) => (
   </svg>
 );
 
-// Define structure for our rich profile metadata
+// Theme structures to load correctly on dynamic routes
+const themes: Record<string, Record<string, string>> = {
+  emerald: { primary: '#0F6E56', dark: '#0a5441', light: '#12856a', xlight: '#e6f4f1', p50: '#f0faf7', p100: '#d1ede6', p200: '#a3dbcd' },
+  blue: { primary: '#2563EB', dark: '#1D4ED8', light: '#3B82F6', xlight: '#EFF6FF', p50: '#F8FAFC', p100: '#DBEAFE', p200: '#BFDBFE' },
+  violet: { primary: '#7C3AED', dark: '#6D28D9', light: '#8B5CF6', xlight: '#F5F3FF', p50: '#FAFAFA', p100: '#EDE9FE', p200: '#DDD6FE' },
+  rose: { primary: '#E11D48', dark: '#BE123C', light: '#F43F5E', xlight: '#FFF1F2', p50: '#FFF5F5', p100: '#FFE4E6', p200: '#FECDD3' },
+  orange: { primary: '#EA580C', dark: '#C2410C', light: '#F97316', xlight: '#FFF7ED', p50: '#FAFAF9', p100: '#FFEDD5', p200: '#FED7AA' },
+  teal: { primary: '#0D9488', dark: '#0F766E', light: '#14B8A6', xlight: '#F0FDFA', p50: '#F4FAF8', p100: '#CCFBF1', p200: '#99F6E4' },
+  indigo: { primary: '#4F46E5', dark: '#4338CA', light: '#6366F1', xlight: '#EEF2FF', p50: '#FAFAFE', p100: '#E0E7FF', p200: '#C7D2FE' }
+};
+
 interface ProfileMetadata {
   personal_photo?: string;
   startup_logo?: string;
@@ -51,7 +63,6 @@ interface ProfileMetadata {
   fees_custom_val?: string;
   skills?: string[];
   
-  // Startup profile specific
   startup_name?: string;
   startup_role?: string;
   startup_stage?: string;
@@ -93,12 +104,12 @@ const parseBioAndMetadata = (rawBio: string): { bioText: string; metadata: Profi
   return { bioText: rawBio || "", metadata: {} };
 };
 
-interface PageProps {
+interface FounderPageProps {
   params: Promise<{ username: string }>;
 }
 
-export default function FounderProfilePage({ params }: PageProps) {
-  const resolvedParams = use(params);
+export default function FounderProfilePage({ params }: FounderPageProps) {
+  const resolvedParams = React.use(params) as { username: string };
   const username = resolvedParams.username;
 
   const [founder, setFounder] = useState<DashboardFounder | null>(null);
@@ -106,6 +117,10 @@ export default function FounderProfilePage({ params }: PageProps) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"personal" | "startup">("personal");
   const [copiedText, setCopiedText] = useState<string | null>(null);
+
+  // Layout states for Sidebar + Header sync
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Scheduling states (Interactive Payout / Booking)
   const [selectedRate, setSelectedRate] = useState<{ label: string; price: string; minutes: string } | null>(null);
@@ -120,6 +135,39 @@ export default function FounderProfilePage({ params }: PageProps) {
 
   const supabase = createClient();
 
+  // Load theme preference on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("founivo-dashboard-theme");
+    if (savedTheme && themes[savedTheme]) {
+      const colors = themes[savedTheme];
+      Object.entries(colors).forEach(([key, val]) => {
+        const cssKey = key === 'primary' ? '--primary' : `--primary-${key}`;
+        document.documentElement.style.setProperty(cssKey, val);
+      });
+    }
+  }, []);
+
+  // Fetch logged in user details for sidebar
+  useEffect(() => {
+    async function loadUserProfile() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profileData } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", user.id)
+            .single();
+          setUserProfile(profileData);
+        }
+      } catch (err) {
+        console.error("Error loading user profile:", err);
+      }
+    }
+    loadUserProfile();
+  }, []);
+
+  // Fetch target founder profile data
   useEffect(() => {
     const sheetUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_CSV_URL;
     
@@ -130,7 +178,6 @@ export default function FounderProfilePage({ params }: PageProps) {
       let finalFounder: DashboardFounder | null = null;
 
       try {
-        // 1. Speculative query to Supabase founder_profiles
         const { data: dbFounders } = await supabase
           .from("founder_profiles")
           .select("*");
@@ -166,7 +213,6 @@ export default function FounderProfilePage({ params }: PageProps) {
         console.error("Database query failed, falling back to sheets:", err);
       }
 
-      // 2. Fallback to Google Sheets/Mock Data if no Supabase profile matched
       if (!finalFounder) {
         if (sheetUrl) {
           try {
@@ -183,7 +229,6 @@ export default function FounderProfilePage({ params }: PageProps) {
         const found = list.find(f => getSlug(f.name) === username);
         if (found) {
           finalFounder = found;
-          // Create simulated metadata from sheets data
           matchedMetadata = {
             personal_photo: DEFAULT_AVATAR,
             startup_logo: DEFAULT_LOGO,
@@ -239,6 +284,10 @@ export default function FounderProfilePage({ params }: PageProps) {
     }, 1200);
   };
 
+  const handleActiveTabChange = (tab: string) => {
+    window.location.href = `/?tab=${tab}`;
+  };
+
   if (loading) {
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "var(--bg-soft)", gap: 12 }}>
@@ -262,7 +311,6 @@ export default function FounderProfilePage({ params }: PageProps) {
     );
   }
 
-  // Generate next 5 dates for the calendar
   const getNextDays = () => {
     const days = [];
     const dateNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -275,7 +323,7 @@ export default function FounderProfilePage({ params }: PageProps) {
         dayName: dateNames[d.getDay()],
         dayNum: d.getDate(),
         month: monthNames[d.getMonth()],
-        fullString: `${dateNames[d.getDay()]}, ${monthNames[d.getMonth()]} ${d.getDate()}`
+        fullString: `${dateNames[d.getDay()]} ${monthNames[d.getMonth()]} ${d.getDate()}`
       });
     }
     return days;
@@ -285,10 +333,69 @@ export default function FounderProfilePage({ params }: PageProps) {
   const timeSlots = ["10:00 AM", "11:30 AM", "2:00 PM", "3:30 PM", "5:00 PM"];
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg-soft)", padding: "40px 24px 80px" }}>
+    <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg-soft)" }}>
       
       {/* Scoped CSS styling for user dashboard profile */}
       <style>{`
+        .sidebar-container {
+          position: fixed;
+          top: 0;
+          bottom: 0;
+          left: 0;
+          width: 248px;
+          z-index: 100;
+          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .main-content-layout {
+          margin-left: 248px;
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          min-height: 100vh;
+          min-width: 0;
+        }
+        .dashboard-header {
+          height: 72px;
+          background: #ffffff;
+          border-bottom: 1px solid var(--border);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 32px;
+          position: sticky;
+          top: 0;
+          z-index: 90;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.01);
+        }
+        .mobile-menu-toggle {
+          display: none;
+          background: none;
+          border: none;
+          color: var(--text);
+          cursor: pointer;
+          padding: 8px;
+          border-radius: 8px;
+        }
+        .mobile-menu-toggle:hover {
+          background: var(--bg-soft);
+        }
+        .greeting-box {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .welcome-label {
+          font-size: 14px;
+          font-weight: 500;
+          color: var(--text-secondary);
+        }
+        .user-name-label {
+          font-size: 15px;
+          font-weight: 850;
+          color: var(--primary);
+          font-family: 'Syne', sans-serif;
+        }
+
         .profile-grid {
           display: grid;
           grid-template-columns: 2fr 1fr;
@@ -320,15 +427,23 @@ export default function FounderProfilePage({ params }: PageProps) {
           box-shadow: 0 6px 15px rgba(0,0,0,0.04);
           border-color: rgba(15, 110, 86, 0.2);
         }
+        .social-logo-container {
+          width: 24px;
+          height: 24px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
         .fee-card {
-          padding: 22px;
+          padding: 24px;
           background: #ffffff;
           border: 1.5px solid var(--border);
           border-radius: 18px;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           display: flex;
           flex-direction: column;
-          gap: 12px;
+          gap: 16px;
           position: relative;
           overflow: hidden;
         }
@@ -351,12 +466,14 @@ export default function FounderProfilePage({ params }: PageProps) {
           text-transform: uppercase;
           letter-spacing: 0.05em;
         }
-        .tab-btn {
+        
+        /* Isolated Profile Switcher Tabs to prevent conflicts with global styles */
+        .profile-tab-btn {
           position: relative;
           padding: 16px 24px;
           font-size: 14px;
           font-weight: 800;
-          color: var(--text-muted);
+          color: var(--text-secondary);
           background: none;
           border: none;
           cursor: pointer;
@@ -365,13 +482,16 @@ export default function FounderProfilePage({ params }: PageProps) {
           text-transform: uppercase;
           letter-spacing: 0.06em;
         }
-        .tab-btn:hover {
+        .profile-tab-btn:hover {
           color: var(--primary);
+          background: var(--primary-50);
+          border-radius: 12px 12px 0 0;
         }
-        .tab-btn.active {
+        .profile-tab-btn.active {
           color: var(--primary);
+          background: none;
         }
-        .tab-btn.active::after {
+        .profile-tab-btn.active::after {
           content: '';
           position: absolute;
           bottom: 0;
@@ -381,6 +501,7 @@ export default function FounderProfilePage({ params }: PageProps) {
           background: var(--primary);
           border-radius: 3px 3px 0 0;
         }
+        
         .cover-banner {
           width: 100%; 
           height: 180px; 
@@ -413,7 +534,7 @@ export default function FounderProfilePage({ params }: PageProps) {
         }
         .date-pill.active {
           border-color: var(--primary);
-          background: var(--primary);
+          background: var(--primary) !important;
           color: white !important;
         }
         .time-pill {
@@ -434,597 +555,615 @@ export default function FounderProfilePage({ params }: PageProps) {
         }
         .time-pill.active {
           border-color: var(--primary);
-          background: var(--primary);
-          color: white;
+          background: var(--primary) !important;
+          color: white !important;
         }
-        .btn-booking-primary {
-          background: var(--primary);
-          border: none;
-          color: white;
-          padding: 14px 24px;
-          border-radius: 12px;
-          font-size: 14px;
-          font-weight: 750;
-          cursor: pointer;
-          transition: all 0.2s;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          font-family: 'Syne', sans-serif;
-          width: 100%;
-        }
-        .btn-booking-primary:hover {
-          background: var(--primary-dark);
-          transform: translateY(-1px);
-          box-shadow: 0 4px 15px rgba(15,110,86,0.25);
-        }
-        .btn-deck-request {
-          background: #ffffff;
-          border: 1.5px solid var(--primary);
-          color: var(--primary);
-          padding: 12px 20px;
-          border-radius: 12px;
-          font-size: 13px;
-          font-weight: 700;
-          cursor: pointer;
-          transition: all 0.2s;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-family: 'Syne', sans-serif;
-        }
-        .btn-deck-request:hover {
-          background: var(--primary-xlight);
+
+        @media (max-width: 768px) {
+          .sidebar-container {
+            transform: translateX(-248px);
+          }
+          .sidebar-container.open {
+            transform: translateX(0);
+            box-shadow: 8px 0 24px rgba(0,0,0,0.1);
+          }
+          .main-content-layout {
+            margin-left: 0;
+          }
+          .mobile-menu-toggle {
+            display: block;
+          }
+          .dashboard-header {
+            padding: 0 16px;
+          }
+          .welcome-label {
+            display: none;
+          }
+          .user-name-label {
+            font-size: 14px;
+          }
         }
       `}</style>
 
-      {/* Main Container */}
-      <div style={{ maxWidth: 1160, margin: "0 auto" }} className="fade-in">
+      {/* Sidebar - Desktop and Mobile */}
+      <div className={`sidebar-container ${mobileMenuOpen ? "open" : ""}`}>
+        <Sidebar 
+          activeTab="" 
+          setActiveTab={handleActiveTabChange} 
+          profile={userProfile}
+        />
+      </div>
+
+      {/* Main Layout Area */}
+      <div className="main-content-layout">
         
-        {/* Back Link */}
-        <Link href="/" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700, color: "var(--primary)", marginBottom: 24 }} className="hover-opacity">
-          <ArrowLeft size={16} /> Back to Directory
-        </Link>
-
-        {/* Cover Banner Area */}
-        <div className="cover-banner">
-          <div style={{ position: "absolute", inset: 0, opacity: 0.15, backgroundImage: "radial-gradient(circle at 10% 20%, #fff 2px, transparent 2px), radial-gradient(circle at 85% 70%, #fff 3px, transparent 3px)", backgroundSize: "50px 50px", borderRadius: 24 }} />
-          
-          {/* Overlapping Identity Hub */}
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 24,
-            background: "rgba(255, 255, 255, 0.9)",
-            backdropFilter: "blur(16px)",
-            border: "1px solid rgba(255, 255, 255, 0.6)",
-            borderRadius: 22,
-            padding: "20px 32px",
-            width: "calc(100% - 64px)",
-            transform: "translateY(55px)",
-            boxShadow: "0 20px 40px -15px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.01)",
-            zIndex: 10
-          }}>
-            {/* Circular Image frame */}
-            <div style={{ position: "relative", width: 104, height: 104, borderRadius: "50%", flexShrink: 0, border: "4px solid #ffffff", background: "#f8fafc", boxShadow: "0 6px 16px rgba(0,0,0,0.08)" }}>
-              <img 
-                src={activeTab === "personal" ? (metadata.personal_photo || DEFAULT_AVATAR) : (metadata.startup_logo || DEFAULT_LOGO)} 
-                alt={founder.name}
-                style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }}
-              />
+        {/* Top Header */}
+        <header className="dashboard-header">
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <button 
+              className="mobile-menu-toggle"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+            <div className="greeting-box">
+              <span className="welcome-label">Viewing Profile:</span>
+              <span className="user-name-label">{founder.name}</span>
             </div>
+          </div>
+        </header>
 
-            {/* Name & Taglines */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <h2 style={{ fontSize: 24, fontWeight: 800, margin: 0, fontFamily: "'Syne', sans-serif", letterSpacing: "-0.5px", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-                  {activeTab === "personal" ? founder.name : (metadata.startup_name || founder.company)}
-                </h2>
-                {founder.verified && <CheckCircle size={18} color="var(--primary)" fill="var(--primary-xlight)" style={{ flexShrink: 0 }} />}
+        {/* Dynamic Page Content */}
+        <main style={{ flex: 1, padding: "28px 24px", maxWidth: 1200, width: "100%", margin: "0 auto" }}>
+          
+          {/* Back Link */}
+          <Link href="/" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700, color: "var(--primary)", marginBottom: 24 }} className="hover-opacity">
+            <ArrowLeft size={16} /> Back to Directory
+          </Link>
+
+          {/* Cover Banner Area */}
+          <div className="cover-banner">
+            <div style={{ position: "absolute", inset: 0, opacity: 0.15, backgroundImage: "radial-gradient(circle at 10% 20%, #fff 2px, transparent 2px), radial-gradient(circle at 85% 70%, #fff 3px, transparent 3px)", backgroundSize: "50px 50px", borderRadius: 24 }} />
+            
+            {/* Overlapping Identity Hub */}
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 24,
+              background: "rgba(255, 255, 255, 0.9)",
+              backdropFilter: "blur(16px)",
+              border: "1px solid rgba(255, 255, 255, 0.6)",
+              borderRadius: 22,
+              padding: "20px 32px",
+              width: "calc(100% - 64px)",
+              transform: "translateY(55px)",
+              boxShadow: "0 20px 40px -15px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.01)",
+              zIndex: 10
+            }}>
+              {/* Circular Image frame */}
+              <div style={{ position: "relative", width: 104, height: 104, borderRadius: "50%", flexShrink: 0, border: "4px solid #ffffff", background: "#f8fafc", boxShadow: "0 6px 16px rgba(0,0,0,0.08)" }}>
+                <img 
+                  src={activeTab === "personal" ? (metadata.personal_photo || DEFAULT_AVATAR) : (metadata.startup_logo || DEFAULT_LOGO)} 
+                  alt={founder.name}
+                  style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }}
+                />
               </div>
+
+              {/* Name & Taglines */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <h2 style={{ fontSize: 24, fontWeight: 800, margin: 0, fontFamily: "'Syne', sans-serif", letterSpacing: "-0.5px", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                    {activeTab === "personal" ? founder.name : (metadata.startup_name || founder.company)}
+                  </h2>
+                  {founder.verified && <CheckCircle size={18} color="var(--primary)" fill="var(--primary-xlight)" style={{ flexShrink: 0 }} />}
+                </div>
+                
+                {activeTab === "personal" ? (
+                  <p style={{ color: "var(--text-secondary)", fontSize: 14, marginTop: 6, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
+                    <Briefcase size={14} color="var(--primary)" />
+                    {founder.role} @ <span style={{ fontWeight: 700, color: "var(--text)" }}>{metadata.startup_name || founder.company}</span>
+                  </p>
+                ) : (
+                  <p style={{ color: "var(--text-secondary)", fontSize: 14, marginTop: 6, fontWeight: 500, display: "flex", alignItems: "center", gap: 12 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Building size={14} color="var(--primary)" /> {metadata.startup_stage || founder.stage}</span>
+                    <span style={{ color: "var(--border)" }}>•</span>
+                    <span>{metadata.startup_category || founder.industry}</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Available to Book Badge */}
+              <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+                <span className="green-tag" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", height: 32, fontSize: 11, background: "var(--primary-xlight)", border: "1px solid var(--primary-100)" }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e", display: "inline-block" }}></span>
+                  Available for Calls
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Navigation Switcher Tabs (Isolated Class `.profile-tab-btn` to prevent green-on-green hiding) */}
+          <div style={{ display: "flex", borderBottom: "1px solid var(--border)", gap: 12, paddingBottom: 0, marginTop: 110 }}>
+            <button 
+              className={`profile-tab-btn ${activeTab === "personal" ? "active" : ""}`}
+              onClick={() => setActiveTab("personal")}
+            >
+              Founder Profile
+            </button>
+            <button 
+              className={`profile-tab-btn ${activeTab === "startup" ? "active" : ""}`}
+              onClick={() => setActiveTab("startup")}
+            >
+              Startup Profile
+            </button>
+          </div>
+
+          {/* PROFILE MAIN GRID */}
+          <div className="profile-grid" style={{ marginTop: 24 }}>
+            
+            {/* LEFT AREA: PRIMARY DETAILS */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 24, minWidth: 0 }}>
               
-              {activeTab === "personal" ? (
-                <p style={{ color: "var(--text-muted)", fontSize: 14, marginTop: 6, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
-                  <Briefcase size={14} color="var(--primary)" />
-                  {founder.role} @ <span style={{ fontWeight: 700, color: "var(--text)" }}>{metadata.startup_name || founder.company}</span>
-                </p>
-              ) : (
-                <p style={{ color: "var(--text-muted)", fontSize: 14, marginTop: 6, fontWeight: 500, display: "flex", alignItems: "center", gap: 12 }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Building size={14} color="var(--primary)" /> {metadata.startup_stage || founder.stage}</span>
-                  <span style={{ color: "var(--border)" }}>•</span>
-                  <span>{metadata.startup_category || founder.industry}</span>
-                </p>
+              {/* 1. PERSONAL TAB */}
+              {activeTab === "personal" && (
+                <>
+                  {/* About Bio Card */}
+                  <div className="card">
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                      <div style={{ width: 32, height: 32, background: "var(--primary-xlight)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <User size={15} color="var(--primary)" />
+                      </div>
+                      <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>About {founder.name.split(" ")[0]}</h3>
+                    </div>
+                    <p style={{ fontSize: 14.5, color: "var(--text-secondary)", lineHeight: 1.75, whiteSpace: "pre-wrap" }}>
+                      {founder.bio || "No biography added yet."}
+                    </p>
+                  </div>
+
+                  {/* Consultation Booking Rates Cards */}
+                  <div className="card">
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                      <div style={{ width: 32, height: 32, background: "var(--primary-xlight)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Clock size={15} color="var(--primary)" />
+                      </div>
+                      <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Consultation Slots</h3>
+                    </div>
+                    <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 20 }}>
+                      Select an advisory session length below to open the scheduler and request a video slot.
+                    </p>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+                      
+                      {/* Rate 1 */}
+                      <div className="fee-card">
+                        <div className="fee-badge">Popular</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
+                          <Clock size={14} color="var(--primary)" /> 30-Min session
+                        </div>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 2, margin: "4px 0" }}>
+                          <span style={{ fontSize: 26, fontWeight: 800, color: "var(--primary)", fontFamily: "'Syne', sans-serif" }}>${metadata.fees_30m || "30"}</span>
+                          <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>/ call</span>
+                        </div>
+                        <p style={{ fontSize: 11.5, color: "var(--text-secondary)", minHeight: 34 }}>Quick check-in, advice on product-market fit, or networking.</p>
+                        
+                        <button 
+                          className="btn-primary" 
+                          style={{ width: "100%", height: 38, marginTop: 8, justifyContent: "center", fontSize: 13 }}
+                          onClick={() => {
+                            setSelectedRate({ label: "30-Minute Consultation", price: metadata.fees_30m || "30", minutes: "30" });
+                            setBookingStep("scheduling");
+                          }}
+                        >
+                          Book Session
+                        </button>
+                      </div>
+
+                      {/* Rate 2 */}
+                      <div className="fee-card">
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
+                          <Clock size={14} color="var(--primary)" /> 1-Hour Session
+                        </div>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 2, margin: "4px 0" }}>
+                          <span style={{ fontSize: 26, fontWeight: 800, color: "var(--primary)", fontFamily: "'Syne', sans-serif" }}>${metadata.fees_1h || "60"}</span>
+                          <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>/ call</span>
+                        </div>
+                        <p style={{ fontSize: 11.5, color: "var(--text-secondary)", minHeight: 34 }}>Detailed business review, pitch deck feedback, or architecture setup.</p>
+                        
+                        <button 
+                          className="btn-primary" 
+                          style={{ width: "100%", height: 38, marginTop: 8, justifyContent: "center", fontSize: 13 }}
+                          onClick={() => {
+                            setSelectedRate({ label: "1-Hour Strategic Session", price: metadata.fees_1h || "60", minutes: "60" });
+                            setBookingStep("scheduling");
+                          }}
+                        >
+                          Book Session
+                        </button>
+                      </div>
+
+                      {/* Rate 3 */}
+                      <div className="fee-card">
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
+                          <Clock size={14} color="var(--primary)" /> {metadata.fees_custom_min || "20"}-Min Custom
+                        </div>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 2, margin: "4px 0" }}>
+                          <span style={{ fontSize: 26, fontWeight: 800, color: "var(--primary)", fontFamily: "'Syne', sans-serif" }}>${metadata.fees_custom_val || "25"}</span>
+                          <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>/ call</span>
+                        </div>
+                        <p style={{ fontSize: 11.5, color: "var(--text-secondary)", minHeight: 34 }}>Custom duration slot set by founder for specific booking demands.</p>
+                        
+                        <button 
+                          className="btn-primary" 
+                          style={{ width: "100%", height: 38, marginTop: 8, justifyContent: "center", fontSize: 13 }}
+                          onClick={() => {
+                            setSelectedRate({ label: `${metadata.fees_custom_min || "20"}-Minute Consultation`, price: metadata.fees_custom_val || "25", minutes: metadata.fees_custom_min || "20" });
+                            setBookingStep("scheduling");
+                          }}
+                        >
+                          Book Session
+                        </button>
+                      </div>
+
+                    </div>
+                  </div>
+
+                  {/* Skills Card */}
+                  <div className="card">
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                      <div style={{ width: 32, height: 32, background: "var(--primary-xlight)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Star size={15} color="var(--primary)" />
+                      </div>
+                      <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Areas of Expertise</h3>
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {(metadata.skills || founder.tags).map((skill, i) => (
+                        <span key={i} className="green-tag" style={{ fontSize: 11.5, padding: "5px 14px", fontWeight: 600 }}>{skill}</span>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* 2. STARTUP TAB */}
+              {activeTab === "startup" && (
+                <>
+                  {/* Startup Description */}
+                  <div className="card">
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                      <div style={{ width: 32, height: 32, background: "var(--primary-xlight)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Building size={15} color="var(--primary)" />
+                      </div>
+                      <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Startup Core Vision</h3>
+                    </div>
+                    <p style={{ fontSize: 14.5, color: "var(--text-secondary)", lineHeight: 1.75, whiteSpace: "pre-wrap" }}>
+                      {metadata.startup_bio || `${metadata.startup_name || founder.company} is building revolutionary solutions. Focuses on innovation and high scale.`}
+                    </p>
+                    
+                    {/* Pitch Deck action */}
+                    <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 24, borderTop: "1px solid var(--border)", paddingTop: 20, flexWrap: "wrap" }}>
+                      <div>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)" }}>Company Pitch Deck</div>
+                        <p style={{ fontSize: 11.5, color: "var(--text-secondary)", marginTop: 2 }}>Request investor presentation slides for review.</p>
+                      </div>
+                      <div style={{ marginLeft: "auto" }}>
+                        {deckRequestSent ? (
+                          <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--primary)", display: "flex", alignItems: "center", gap: 6 }}>
+                            <CheckCircle2 size={16} /> Request Sent!
+                          </span>
+                        ) : (
+                          <button 
+                            className="btn-outline" 
+                            style={{ height: 38, fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6 }}
+                            onClick={handleRequestDeck}
+                            disabled={deckRequestLoading}
+                          >
+                            {deckRequestLoading ? (
+                              <><Loader2 className="animate-spin" size={14} /> Requesting...</>
+                            ) : (
+                              <><Mail size={14} /> Request Deck</>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Startup Details Grid */}
+                  <div className="card">
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                      <div style={{ width: 32, height: 32, background: "var(--primary-xlight)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Building size={15} color="var(--primary)" />
+                      </div>
+                      <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Business Snapshot</h3>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20 }}>
+                      {[
+                        { label: "Startup Name", value: metadata.startup_name || founder.company },
+                        { label: "Founder Role", value: metadata.startup_role || founder.role },
+                        { label: "Funding Stage", value: metadata.startup_stage || founder.stage },
+                        { label: "Industry Category", value: metadata.startup_category || founder.industry },
+                        { label: "Headquarters", value: metadata.startup_location || founder.location },
+                        { label: "Team Size", value: metadata.startup_team_size || "5-10" },
+                        { label: "Total Funding", value: metadata.startup_funding || "$1M+" },
+                      ].map((f, i) => (
+                        <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          <span style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>{f.label}</span>
+                          <span style={{ fontSize: 14.5, fontWeight: 600, color: "var(--text)" }}>{f.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* INTERACTIVE CALENDAR SCHEDULER WIDGET */}
+              {bookingStep !== "select-rate" && (
+                <div className="card fade-in" style={{ border: "1.5px solid var(--primary)", boxShadow: "0 10px 30px rgba(15, 110, 86, 0.08)" }}>
+                  
+                  {bookingStep === "scheduling" ? (
+                    <>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 20 }}>
+                        <div>
+                          <h3 style={{ fontSize: 17, fontWeight: 800, color: "var(--text)", fontFamily: "'Syne', sans-serif" }}>Schedule Consultation</h3>
+                          <p style={{ fontSize: 12.5, color: "var(--text-secondary)", marginTop: 2 }}>
+                            Booking: <strong style={{ color: "var(--primary)" }}>{selectedRate?.label} (${selectedRate?.price})</strong>
+                          </p>
+                        </div>
+                        <button 
+                          onClick={() => setBookingStep("select-rate")}
+                          style={{ background: "none", border: "none", fontSize: 11.5, fontWeight: 750, color: "var(--text-secondary)", cursor: "pointer" }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+
+                      {/* Step 1: Select Date */}
+                      <div style={{ marginBottom: 20 }}>
+                        <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text)", textTransform: "uppercase", display: "block", marginBottom: 10, letterSpacing: "0.03em" }}>1. Select Meeting Date</span>
+                        <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
+                          {nextDays.map((d, i) => (
+                            <div 
+                              key={i} 
+                              className={`date-pill ${bookingDate === d.fullString ? "active" : ""}`}
+                              onClick={() => setBookingDate(d.fullString)}
+                              style={{ color: bookingDate === d.fullString ? "#ffffff" : "var(--text-secondary)" }}
+                            >
+                              <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.8, color: "inherit" }}>{d.dayName}</span>
+                              <span style={{ fontSize: 16, fontWeight: 800, color: "inherit" }}>{d.dayNum}</span>
+                              <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.7, color: "inherit" }}>{d.month}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Step 2: Select Time */}
+                      <div style={{ marginBottom: 24 }}>
+                        <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text)", textTransform: "uppercase", display: "block", marginBottom: 10, letterSpacing: "0.03em" }}>2. Select Available Slot (PKT)</span>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          {timeSlots.map((time, i) => (
+                            <button 
+                              key={i}
+                              className={`time-pill ${bookingTime === time ? "active" : ""}`}
+                              onClick={() => setBookingTime(time)}
+                              style={{ color: bookingTime === time ? "#ffffff" : "var(--text-secondary)" }}
+                            >
+                              {time}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Submit checkout */}
+                      <button 
+                        className="btn-primary"
+                        onClick={handleBookSession}
+                        disabled={bookingLoading}
+                        style={{ width: "100%", justifyContent: "center", padding: "14px 24px", height: 48, fontSize: 14 }}
+                      >
+                        {bookingLoading ? (
+                          <><Loader2 className="animate-spin" size={16} /> Verifying Secure Checkout...</>
+                        ) : (
+                          <><Calendar size={16} /> Confirm Booking & Request Session</>
+                        )}
+                      </button>
+                    </>
+                  ) : (
+                    
+                    /* Booking success state */
+                    <div style={{ textAlign: "center", padding: "20px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+                      <div style={{ width: 56, height: 56, background: "var(--primary-xlight)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)" }} className="justify-center items-center">
+                        <CheckCircle2 size={36} />
+                      </div>
+                      <div>
+                        <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--text)", fontFamily: "'Syne', sans-serif" }}>Consultation Requested!</h3>
+                        <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 6, maxWidth: 360, lineHeight: 1.5 }}>
+                          Your calendar request has been forwarded to <strong>{founder.name}</strong>. You will receive an email invite containing the video room link as soon as they confirm!
+                        </p>
+                      </div>
+                      <div style={{ background: "var(--bg-soft)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 18px", width: "100%", maxWidth: 340, textAlign: "left" }}>
+                        <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>SESSION SUMMARY</div>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, marginTop: 4, color: "var(--text)" }}>{selectedRate?.label} ({selectedRate?.minutes}m)</div>
+                        <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 2 }}>{bookingDate} at {bookingTime}</div>
+                      </div>
+                      <button 
+                        className="btn-ghost" 
+                        style={{ height: 38, padding: "0 20px", fontSize: 12.5 }}
+                        onClick={() => {
+                          setBookingStep("select-rate");
+                          setSelectedRate(null);
+                          setBookingDate(null);
+                          setBookingTime(null);
+                        }}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
-            {/* Available to Book Badge */}
-            <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
-              <span className="green-tag" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", height: 32, fontSize: 11, background: "var(--primary-xlight)", border: "1px solid var(--primary-100)" }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e", display: "inline-block" }}></span>
-                Available for Calls
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Navigation Switcher Tabs */}
-        <div style={{ display: "flex", borderBottom: "1px solid var(--border)", gap: 12, paddingBottom: 0, marginTop: 110 }}>
-          <button 
-            className={`tab-btn ${activeTab === "personal" ? "active" : ""}`}
-            onClick={() => setActiveTab("personal")}
-          >
-            Personal Profile
-          </button>
-          <button 
-            className={`tab-btn ${activeTab === "startup" ? "active" : ""}`}
-            onClick={() => setActiveTab("startup")}
-          >
-            Startup Profile
-          </button>
-        </div>
-
-        {/* PROFILE MAIN GRID */}
-        <div className="profile-grid" style={{ marginTop: 24 }}>
-          
-          {/* LEFT AREA: PRIMARY DETAILS */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 24, minWidth: 0 }}>
-            
-            {/* 1. PERSONAL TAB */}
-            {activeTab === "personal" && (
-              <>
-                {/* About Bio Card */}
-                <div className="card">
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                    <div style={{ width: 32, height: 32, background: "var(--primary-xlight)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <User size={15} color="var(--primary)" />
-                    </div>
-                    <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>About Aisha</h3>
-                  </div>
-                  <p style={{ fontSize: 14.5, color: "var(--text-secondary)", lineHeight: 1.75, whiteSpace: "pre-wrap" }}>
-                    {founder.bio || "No biography added yet."}
-                  </p>
-                </div>
-
-                {/* Consultation Booking Rates Cards */}
-                <div className="card">
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                    <div style={{ width: 32, height: 32, background: "var(--primary-xlight)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <Clock size={15} color="var(--primary)" />
-                    </div>
-                    <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Consultation Slots</h3>
-                  </div>
-                  <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 20 }}>
-                    Select an advisory session length below to open the scheduler and request a video slot.
-                  </p>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
-                    
-                    {/* Rate 1 */}
-                    <div className="fee-card">
-                      <div className="fee-badge">Popular</div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
-                        <Clock size={14} color="var(--primary)" /> 30-Min session
-                      </div>
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 2, margin: "4px 0" }}>
-                        <span style={{ fontSize: 26, fontWeight: 800, color: "var(--primary)", fontFamily: "'Syne', sans-serif" }}>${metadata.fees_30m || "30"}</span>
-                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>/ call</span>
-                      </div>
-                      <p style={{ fontSize: 11.5, color: "var(--text-muted)", minHeight: 34 }}>Quick check-in, advice on product-market fit, or networking.</p>
-                      
-                      <button 
-                        className="card-btn-primary" 
-                        style={{ width: "100%", height: 36, marginTop: 8 }}
-                        onClick={() => {
-                          setSelectedRate({ label: "30-Minute Consultation", price: metadata.fees_30m || "30", minutes: "30" });
-                          setBookingStep("scheduling");
-                        }}
-                      >
-                        Book Session
-                      </button>
-                    </div>
-
-                    {/* Rate 2 */}
-                    <div className="fee-card">
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
-                        <Clock size={14} color="var(--primary)" /> 1-Hour Session
-                      </div>
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 2, margin: "4px 0" }}>
-                        <span style={{ fontSize: 26, fontWeight: 800, color: "var(--primary)", fontFamily: "'Syne', sans-serif" }}>${metadata.fees_1h || "60"}</span>
-                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>/ call</span>
-                      </div>
-                      <p style={{ fontSize: 11.5, color: "var(--text-muted)", minHeight: 34 }}>Detailed business review, pitch deck feedback, or architecture setup.</p>
-                      
-                      <button 
-                        className="card-btn-primary" 
-                        style={{ width: "100%", height: 36, marginTop: 8 }}
-                        onClick={() => {
-                          setSelectedRate({ label: "1-Hour Strategic Session", price: metadata.fees_1h || "60", minutes: "60" });
-                          setBookingStep("scheduling");
-                        }}
-                      >
-                        Book Session
-                      </button>
-                    </div>
-
-                    {/* Rate 3 */}
-                    <div className="fee-card">
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
-                        <Clock size={14} color="var(--primary)" /> {metadata.fees_custom_min || "20"}-Min Custom
-                      </div>
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 2, margin: "4px 0" }}>
-                        <span style={{ fontSize: 26, fontWeight: 800, color: "var(--primary)", fontFamily: "'Syne', sans-serif" }}>${metadata.fees_custom_val || "25"}</span>
-                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>/ call</span>
-                      </div>
-                      <p style={{ fontSize: 11.5, color: "var(--text-muted)", minHeight: 34 }}>Custom duration slot set by founder for specific booking demands.</p>
-                      
-                      <button 
-                        className="card-btn-primary" 
-                        style={{ width: "100%", height: 36, marginTop: 8 }}
-                        onClick={() => {
-                          setSelectedRate({ label: `${metadata.fees_custom_min || "20"}-Minute Consultation`, price: metadata.fees_custom_val || "25", minutes: metadata.fees_custom_min || "20" });
-                          setBookingStep("scheduling");
-                        }}
-                      >
-                        Book Session
-                      </button>
-                    </div>
-
-                  </div>
-                </div>
-
-                {/* Skills Card */}
-                <div className="card">
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                    <div style={{ width: 32, height: 32, background: "var(--primary-xlight)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <Star size={15} color="var(--primary)" />
-                    </div>
-                    <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Areas of Expertise</h3>
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {(metadata.skills || founder.tags).map((skill, i) => (
-                      <span key={i} className="green-tag" style={{ fontSize: 11.5, padding: "5px 14px", fontWeight: 600 }}>{skill}</span>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* 2. STARTUP TAB */}
-            {activeTab === "startup" && (
-              <>
-                {/* Startup Description */}
-                <div className="card">
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                    <div style={{ width: 32, height: 32, background: "var(--primary-xlight)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <Building size={15} color="var(--primary)" />
-                    </div>
-                    <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Startup Core Vision</h3>
-                  </div>
-                  <p style={{ fontSize: 14.5, color: "var(--text-secondary)", lineHeight: 1.75, whiteSpace: "pre-wrap" }}>
-                    {metadata.startup_bio || `${metadata.startup_name || founder.company} is building revolutionary solutions. Focuses on innovation and high scale.`}
-                  </p>
-                  
-                  {/* Pitch Deck action */}
-                  <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 24, borderTop: "1px solid var(--border)", paddingTop: 20 }}>
-                    <div>
-                      <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)" }}>Company Pitch Deck</div>
-                      <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>Request investor presentation slides for review.</p>
-                    </div>
-                    <div style={{ marginLeft: "auto" }}>
-                      {deckRequestSent ? (
-                        <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--primary)", display: "flex", alignItems: "center", gap: 6 }}>
-                          <CheckCircle2 size={16} /> Request Sent!
-                        </span>
-                      ) : (
-                        <button 
-                          className="btn-deck-request" 
-                          onClick={handleRequestDeck}
-                          disabled={deckRequestLoading}
-                        >
-                          {deckRequestLoading ? (
-                            <><Loader2 className="animate-spin" size={14} /> Requesting...</>
-                          ) : (
-                            <><Mail size={14} /> Request Deck</>
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Startup Details Grid */}
-                <div className="card">
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-                    <div style={{ width: 32, height: 32, background: "var(--primary-xlight)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <Building size={15} color="var(--primary)" />
-                    </div>
-                    <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Business Snapshot</h3>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20 }}>
-                    {[
-                      { label: "Startup Name", value: metadata.startup_name || founder.company },
-                      { label: "Founder Role", value: metadata.startup_role || founder.role },
-                      { label: "Funding Stage", value: metadata.startup_stage || founder.stage },
-                      { label: "Industry Category", value: metadata.startup_category || founder.industry },
-                      { label: "Headquarters", value: metadata.startup_location || founder.location },
-                      { label: "Team Size", value: metadata.startup_team_size || "5-10" },
-                      { label: "Total Funding", value: metadata.startup_funding || "$1M+" },
-                    ].map((f, i) => (
-                      <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>{f.label}</span>
-                        <span style={{ fontSize: 14.5, fontWeight: 600, color: "var(--text)" }}>{f.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* INTERACTIVE CALENDAR SCHEDULER WIDGET */}
-            {bookingStep !== "select-rate" && (
-              <div className="card fade-in" style={{ border: "1.5px solid var(--primary)", boxShadow: "0 10px 30px rgba(15, 110, 86, 0.08)" }}>
-                
-                {bookingStep === "scheduling" ? (
-                  <>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 20 }}>
-                      <div>
-                        <h3 style={{ fontSize: 17, fontWeight: 800, color: "var(--text)", fontFamily: "'Syne', sans-serif" }}>Schedule Consultation</h3>
-                        <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: 2 }}>
-                          Booking: <strong style={{ color: "var(--primary)" }}>{selectedRate?.label} (${selectedRate?.price})</strong>
-                        </p>
-                      </div>
-                      <button 
-                        onClick={() => setBookingStep("select-rate")}
-                        style={{ background: "none", border: "none", fontSize: 11.5, fontWeight: 750, color: "var(--text-muted)", cursor: "pointer" }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-
-                    {/* Step 1: Select Date */}
-                    <div style={{ marginBottom: 20 }}>
-                      <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text)", textTransform: "uppercase", display: "block", marginBottom: 10, letterSpacing: "0.03em" }}>1. Select Meeting Date</span>
-                      <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
-                        {nextDays.map((d, i) => (
-                          <div 
-                            key={i} 
-                            className={`date-pill ${bookingDate === d.fullString ? "active" : ""}`}
-                            onClick={() => setBookingDate(d.fullString)}
-                          >
-                            <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.8, color: bookingDate === d.fullString ? "white" : "inherit" }}>{d.dayName}</span>
-                            <span style={{ fontSize: 16, fontWeight: 800 }}>{d.dayNum}</span>
-                            <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.7 }}>{d.month}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Step 2: Select Time */}
-                    <div style={{ marginBottom: 24 }}>
-                      <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text)", textTransform: "uppercase", display: "block", marginBottom: 10, letterSpacing: "0.03em" }}>2. Select Available Slot (PKT)</span>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        {timeSlots.map((time, i) => (
-                          <button 
-                            key={i}
-                            className={`time-pill ${bookingTime === time ? "active" : ""}`}
-                            onClick={() => setBookingTime(time)}
-                          >
-                            {time}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Submit checkout */}
-                    <button 
-                      className="btn-booking-primary"
-                      onClick={handleBookSession}
-                      disabled={bookingLoading}
-                    >
-                      {bookingLoading ? (
-                        <><Loader2 className="animate-spin" size={16} /> Verifying Secure Checkout...</>
-                      ) : (
-                        <><Calendar size={16} /> Confirm Booking & Request Session</>
-                      )}
-                    </button>
-                  </>
-                ) : (
-                  
-                  /* Booking success state */
-                  <div style={{ textAlign: "center", padding: "20px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
-                    <div style={{ width: 56, height: 56, background: "var(--primary-soft)", borderRadius: "50%", display: "flex", alignItems: "center", justify: "center", color: "var(--primary)" } as any} className="justify-center items-center">
-                      <CheckCircle2 size={36} />
-                    </div>
-                    <div>
-                      <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--text)", fontFamily: "'Syne', sans-serif" }}>Consultation Requested!</h3>
-                      <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6, maxWidth: 360, lineHeight: 1.5 }}>
-                        Your calendar request has been forwarded to <strong>{founder.name}</strong>. You will receive an email invite containing the video room link as soon as they confirm!
-                      </p>
-                    </div>
-                    <div style={{ background: "var(--bg-soft)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 18px", width: "100%", maxWidth: 340, textAlign: "left" }}>
-                      <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>SESSION SUMMARY</div>
-                      <div style={{ fontSize: 13.5, fontWeight: 700, marginTop: 4, color: "var(--text)" }}>{selectedRate?.label} ({selectedRate?.minutes}m)</div>
-                      <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 2 }}>{bookingDate} at {bookingTime}</div>
-                    </div>
-                    <button 
-                      className="btn-ghost" 
-                      style={{ height: 38, padding: "0 20px", fontSize: 12.5 }}
-                      onClick={() => {
-                        setBookingStep("select-rate");
-                        setSelectedRate(null);
-                        setBookingDate(null);
-                        setBookingTime(null);
-                      }}
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* RIGHT AREA: SIDEBAR CONTACT DETAILS */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            
-            {/* SOCIAL / CONNECTIONS CARD */}
-            <div className="card">
-              <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>
-                {activeTab === "personal" ? "Founder Connections" : "Startup Links"}
-              </h3>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {activeTab === "personal" ? (
-                  /* Personal Links with authentic colors */
-                  <>
-                    {metadata.startup_linkedin || founder.linkedin ? (
-                      <a 
-                        href={(metadata.startup_linkedin || founder.linkedin).startsWith("http") ? (metadata.startup_linkedin || founder.linkedin) : `https://${metadata.startup_linkedin || founder.linkedin}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="social-link-item"
-                      >
-                        <div className="social-logo-container">
-                          <LinkedInLogo size={16} />
-                        </div>
-                        <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", flex: 1 }}>LinkedIn Profile</span>
-                        <ExternalLink size={12} color="var(--text-muted)" style={{ flexShrink: 0 }} />
-                      </a>
-                    ) : (
-                      <div style={{ color: "var(--text-muted)", fontSize: 12.5, fontStyle: "italic", padding: "10px 12px" }}>No LinkedIn profile listed.</div>
-                    )}
-
-                    {metadata.startup_twitter ? (
-                      <a 
-                        href={`https://twitter.com/${metadata.startup_twitter.replace('@', '')}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="social-link-item"
-                      >
-                        <div className="social-logo-container">
-                          <TwitterXLogo size={14} />
-                        </div>
-                        <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", flex: 1 }}>Twitter / X Profile</span>
-                        <ExternalLink size={12} color="var(--text-muted)" style={{ flexShrink: 0 }} />
-                      </a>
-                    ) : null}
-
-                    {metadata.startup_website || founder.companywebsite ? (
-                      <a 
-                        href={(metadata.startup_website || founder.companywebsite).startsWith("http") ? (metadata.startup_website || founder.companywebsite) : `https://${metadata.startup_website || founder.companywebsite}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="social-link-item"
-                      >
-                        <div className="social-logo-container">
-                          <GlobeLogo size={16} />
-                        </div>
-                        <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", flex: 1 }}>Personal Portfolio</span>
-                        <ExternalLink size={12} color="var(--text-muted)" style={{ flexShrink: 0 }} />
-                      </a>
-                    ) : null}
-                  </>
-                ) : (
-                  /* Startup Links */
-                  <>
-                    {metadata.startup_website || founder.companywebsite ? (
-                      <a 
-                        href={(metadata.startup_website || founder.companywebsite).startsWith("http") ? (metadata.startup_website || founder.companywebsite) : `https://${metadata.startup_website || founder.companywebsite}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="social-link-item"
-                      >
-                        <div className="social-logo-container">
-                          <GlobeLogo size={16} />
-                        </div>
-                        <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", flex: 1 }}>Company Website</span>
-                        <ExternalLink size={12} color="var(--text-muted)" style={{ flexShrink: 0 }} />
-                      </a>
-                    ) : (
-                      <div style={{ color: "var(--text-muted)", fontSize: 12.5, fontStyle: "italic", padding: "10px 12px" }}>No startup website listed.</div>
-                    )}
-
-                    {metadata.startup_linkedin ? (
-                      <a 
-                        href={(metadata.startup_linkedin).startsWith("http") ? (metadata.startup_linkedin) : `https://${metadata.startup_linkedin}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="social-link-item"
-                      >
-                        <div className="social-logo-container">
-                          <LinkedInLogo size={16} />
-                        </div>
-                        <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", flex: 1 }}>Company LinkedIn</span>
-                        <ExternalLink size={12} color="var(--text-muted)" style={{ flexShrink: 0 }} />
-                      </a>
-                    ) : null}
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* DIRECT CONTACT PANEL */}
-            <div className="card">
-              <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>Verified Contacts</h3>
+            {/* RIGHT AREA: SIDEBAR CONTACT DETAILS */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
               
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {/* SOCIAL / CONNECTIONS CARD */}
+              <div className="card">
+                <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>
+                  {activeTab === "personal" ? "Founder Connections" : "Startup Links"}
+                </h3>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {activeTab === "personal" ? (
+                    /* Personal Links with authentic colors */
+                    <>
+                      {metadata.startup_linkedin || founder.linkedin ? (
+                        <a 
+                          href={(metadata.startup_linkedin || founder.linkedin).startsWith("http") ? (metadata.startup_linkedin || founder.linkedin) : `https://${metadata.startup_linkedin || founder.linkedin}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="social-link-item"
+                        >
+                          <div className="social-logo-container">
+                            <LinkedInLogo size={16} />
+                          </div>
+                          <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", flex: 1 }}>LinkedIn Profile</span>
+                          <ExternalLink size={12} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
+                        </a>
+                      ) : (
+                        <div style={{ color: "var(--text-secondary)", fontSize: 12.5, fontStyle: "italic", padding: "10px 12px" }}>No LinkedIn profile listed.</div>
+                      )}
+
+                      {metadata.startup_twitter ? (
+                        <a 
+                          href={`https://twitter.com/${metadata.startup_twitter.replace('@', '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="social-link-item"
+                        >
+                          <div className="social-logo-container">
+                            <TwitterXLogo size={14} />
+                          </div>
+                          <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", flex: 1 }}>Twitter / X Profile</span>
+                          <ExternalLink size={12} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
+                        </a>
+                      ) : null}
+
+                      {metadata.startup_website || founder.companywebsite ? (
+                        <a 
+                          href={(metadata.startup_website || founder.companywebsite).startsWith("http") ? (metadata.startup_website || founder.companywebsite) : `https://${metadata.startup_website || founder.companywebsite}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="social-link-item"
+                        >
+                          <div className="social-logo-container">
+                            <GlobeLogo size={16} />
+                          </div>
+                          <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", flex: 1 }}>Personal Portfolio</span>
+                          <ExternalLink size={12} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
+                        </a>
+                      ) : null}
+                    </>
+                  ) : (
+                    /* Startup Links */
+                    <>
+                      {metadata.startup_website || founder.companywebsite ? (
+                        <a 
+                          href={(metadata.startup_website || founder.companywebsite).startsWith("http") ? (metadata.startup_website || founder.companywebsite) : `https://${metadata.startup_website || founder.companywebsite}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="social-link-item"
+                        >
+                          <div className="social-logo-container">
+                            <GlobeLogo size={16} />
+                          </div>
+                          <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", flex: 1 }}>Company Website</span>
+                          <ExternalLink size={12} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
+                        </a>
+                      ) : (
+                        <div style={{ color: "var(--text-secondary)", fontSize: 12.5, fontStyle: "italic", padding: "10px 12px" }}>No startup website listed.</div>
+                      )}
+
+                      {metadata.startup_linkedin ? (
+                        <a 
+                          href={(metadata.startup_linkedin).startsWith("http") ? (metadata.startup_linkedin) : `https://${metadata.startup_linkedin}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="social-link-item"
+                        >
+                          <div className="social-logo-container">
+                            <LinkedInLogo size={16} />
+                          </div>
+                          <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", flex: 1 }}>Company LinkedIn</span>
+                          <ExternalLink size={12} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
+                        </a>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* DIRECT CONTACT PANEL */}
+              <div className="card">
+                <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>Verified Contacts</h3>
                 
-                {/* Email row */}
-                <div style={{ padding: "12px 14px", background: "var(--bg-soft)", border: "1px solid var(--border)", borderRadius: 12, display: "flex", alignItems: "center", gap: 10 }}>
-                  <Mail size={16} color="var(--primary)" style={{ flexShrink: 0 }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>Email Address</div>
-                    <div style={{ fontSize: 13, color: "var(--text)", fontWeight: 600, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", marginTop: 2 }}>
-                      {founder.email || "aisha@novatech.io"}
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  
+                  {/* Email row */}
+                  <div style={{ padding: "12px 14px", background: "var(--bg-soft)", border: "1px solid var(--border)", borderRadius: 12, display: "flex", alignItems: "center", gap: 10 }}>
+                    <Mail size={16} color="var(--primary)" style={{ flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 10, color: "var(--text-secondary)", textTransform: "uppercase", fontWeight: 700 }}>Email Address</div>
+                      <div style={{ fontSize: 13, color: "var(--text)", fontWeight: 600, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", marginTop: 2 }}>
+                        {founder.email || "aisha@novatech.io"}
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => handleCopy(founder.email || "aisha@novatech.io", 'email')}
+                      style={{ background: "none", border: "none", color: "var(--primary)", fontSize: 11, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}
+                    >
+                      {copiedText === 'email' ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+
+                  {/* Rating views summary */}
+                  <div style={{ padding: "12px 14px", border: "1px solid var(--border)", borderRadius: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, color: "var(--text-secondary)" }}>
+                      <span>Rating Score:</span>
+                      <strong style={{ color: "var(--text)" }}>★ {founder.rating} ({founder.meetings} bookings)</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, color: "var(--text-secondary)" }}>
+                      <span>Profile Views:</span>
+                      <strong style={{ color: "var(--text)" }}>{founder.views}</strong>
                     </div>
                   </div>
-                  <button 
-                    onClick={() => handleCopy(founder.email || "aisha@novatech.io", 'email')}
-                    style={{ background: "none", border: "none", color: "var(--primary)", fontSize: 11, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}
-                  >
-                    {copiedText === 'email' ? 'Copied!' : 'Copy'}
-                  </button>
-                </div>
 
-                {/* Rating views summary */}
-                <div style={{ padding: "12px 14px", border: "1px solid var(--border)", borderRadius: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, color: "var(--text-secondary)" }}>
-                    <span>Rating Score:</span>
-                    <strong style={{ color: "var(--text)" }}>★ {founder.rating} ({founder.meetings} bookings)</strong>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, color: "var(--text-secondary)" }}>
-                    <span>Profile Views:</span>
-                    <strong style={{ color: "var(--text)" }}>{founder.views}</strong>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-
-            {/* CHAT CALLOUT / DIRECT MESSAGE */}
-            <div className="card" style={{ border: "1.5px dashed rgba(15, 110, 86, 0.3)", background: "rgba(15, 110, 86, 0.01)" }}>
-              <div style={{ display: "flex", gap: 10, alignItems: "start" }}>
-                <MessageSquare size={18} color="var(--primary)" style={{ flexShrink: 0, marginTop: 2 }} />
-                <div>
-                  <h4 style={{ fontSize: 13.5, fontWeight: 700, color: "var(--primary)" }}>Direct Messaging</h4>
-                  <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4, lineHeight: 1.5 }}>
-                    Investors or founders who have booked a call can chat with {founder.name} directly via Founivo Messages.
-                  </p>
-                  <Link href="/messages" style={{ textDecoration: "none" }}>
-                    <button className="btn-booking-primary" style={{ height: 32, padding: "0 14px", fontSize: 11.5, marginTop: 12, borderRadius: 8 }}>
-                      Send Message
-                    </button>
-                  </Link>
                 </div>
               </div>
+
+              {/* CHAT CALLOUT / DIRECT MESSAGE */}
+              <div className="card" style={{ border: "1.5px dashed rgba(15, 110, 86, 0.3)", background: "rgba(15, 110, 86, 0.01)" }}>
+                <div style={{ display: "flex", gap: 10, alignItems: "start" }}>
+                  <MessageSquare size={18} color="var(--primary)" style={{ flexShrink: 0, marginTop: 2 }} />
+                  <div>
+                    <h4 style={{ fontSize: 13.5, fontWeight: 700, color: "var(--primary)" }}>Direct Messaging</h4>
+                    <p style={{ fontSize: 11.5, color: "var(--text-secondary)", marginTop: 4, lineHeight: 1.5 }}>
+                      Investors or founders who have booked a call can chat with {founder.name} directly via Founivo Messages.
+                    </p>
+                    <Link href="/messages" style={{ textDecoration: "none" }}>
+                      <button className="btn-primary" style={{ width: "100%", justifyContent: "center", padding: "8px 14px", fontSize: 12, height: 36, marginTop: 12 }}>
+                        Send Message
+                      </button>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+
             </div>
 
           </div>
 
-        </div>
-
+        </main>
       </div>
 
     </div>

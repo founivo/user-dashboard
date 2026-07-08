@@ -29,6 +29,17 @@ export default function DashboardClient() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const supabase = createClient();
 
+  // Read initial tab parameter from URL if present
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam) {
+        setActiveTab(tabParam);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     async function syncSession() {
       if (typeof window !== "undefined") {
