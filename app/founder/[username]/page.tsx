@@ -1,10 +1,10 @@
 "use client";
-import React, { useState, useEffect, use } from "react";
+import React, { useState, useEffect, use, useRef } from "react";
 import { 
   ArrowLeft, MapPin, CheckCircle, Star, Mail, Globe, 
   Copy, Check, Loader2, Clock, Calendar, CheckCircle2, 
   ExternalLink, ChevronRight, MessageSquare, AlertCircle, Briefcase, Building, Sparkles, User,
-  Menu, X
+  Menu, X, Edit3, Camera, Plus, Trash2
 } from "lucide-react";
 import Link from "next/link";
 import { DashboardFounder } from "@/app/lib/googleSheets";
@@ -54,6 +54,39 @@ const themes: Record<string, Record<string, string>> = {
   indigo: { primary: '#4F46E5', dark: '#4338CA', light: '#6366F1', xlight: '#EEF2FF', p50: '#FAFAFE', p100: '#E0E7FF', p200: '#C7D2FE' }
 };
 
+const DEFAULT_AVATAR = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80";
+const DEFAULT_LOGO = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=256&q=80";
+
+const INITIAL_MOCK_FOUNDERS: DashboardFounder[] = [
+  { name: "Aisha Malik", role: "CEO & Co-founder", company: "NovaTech AI", industry: "AI/ML", stage: "Series A", location: "San Francisco", tags: ["AI/ML", "SaaS", "B2B"], avatar: "AM", rating: 4.9, views: 284, meetings: 32, available: true, verified: true, bio: "Built and scaled 2 AI startups. Ex-Google. Passionate about helping founders navigate product-market fit.", email: "aisha@novatech.io", linkedin: "https://linkedin.com/in/aishamalik", companywebsite: "https://novatech.io" },
+  { name: "Carlos Rivera", role: "Founder", company: "GreenPay", industry: "FinTech", stage: "Seed", location: "New York", tags: ["FinTech", "Payments", "Scaling"], avatar: "CR", rating: 4.8, views: 197, meetings: 18, available: true, verified: true, bio: "Fintech entrepreneur with 8 years experience. Raised $2M seed round. Love helping first-time founders.", email: "carlos@greenpay.co", linkedin: "https://linkedin.com/in/carlosrivera", companywebsite: "https://greenpay.co" },
+  { name: "Priya Nair", role: "Co-founder & CTO", company: "EduBridge", industry: "EdTech", stage: "Pre-seed", location: "London", tags: ["EdTech", "B2C", "Tech"], avatar: "PN", rating: 5.0, views: 341, meetings: 41, available: false, verified: true, bio: "Technical co-founder turned CEO. MIT grad. Passionate about accessible education and early-stage tech.", email: "priya@edubridge.io", linkedin: "https://linkedin.com/in/priyanair", companywebsite: "https://edubridge.io" },
+  { name: "Sam Osei", role: "Founder", company: "HealthSync", industry: "HealthTech", stage: "Series A", location: "Nairobi", tags: ["HealthTech", "Africa", "Impact"], avatar: "SO", rating: 4.7, views: 156, meetings: 24, available: true, verified: true, bio: "Health tech founder operating across East Africa. 3x exits. Mentor at Techstars Africa.", email: "sam@healthsync.co", linkedin: "https://linkedin.com/in/samosei", companywebsite: "https://healthsync.co" },
+  { name: "Lena Müller", role: "CEO", company: "ClimateOps", industry: "ClimaTech", stage: "Seed", location: "Berlin", tags: ["ClimaTech", "B2B"], avatar: "LM", rating: 4.6, views: 122, meetings: 15, available: true, verified: false, bio: "Climate tech CEO building carbon management tools for enterprise. YC S22 alumni.", email: "lena@climateops.de", linkedin: "https://linkedin.com/in/lenamuller", companywebsite: "https://climateops.de" },
+  { name: "David Kim", role: "Co-founder", company: "CryptoEdge", industry: "Web3", stage: "Pre-seed", location: "Singapore", tags: ["Web3", "DeFi"], avatar: "DK", rating: 4.5, views: 98, meetings: 11, available: false, verified: true, bio: "Web3 builder since 2017. Co-founded 3 blockchain protocols. Deep expertise in DeFi and tokenomics.", email: "david@cryptoedge.io", linkedin: "https://linkedin.com/in/davidkim", companywebsite: "https://cryptoedge.io" },
+];
+
+const parseBioAndMetadata = (rawBio: string): { bioText: string; metadata: ProfileMetadata } => {
+  const marker = "\n\n---METADATA---\n";
+  if (rawBio && rawBio.includes(marker)) {
+    const parts = rawBio.split(marker);
+    const bioText = parts[0];
+    try {
+      const metadata = JSON.parse(parts[1]);
+      return { bioText, metadata };
+    } catch (e) {
+      console.error("Error parsing profile metadata:", e);
+      return { bioText: rawBio, metadata: {} };
+    }
+  }
+  return { bioText: rawBio || "", metadata: {} };
+};
+
+const serializeBioAndMetadata = (bio: string, metadata: ProfileMetadata): string => {
+  const marker = "\n\n---METADATA---\n";
+  return bio.split(marker)[0] + marker + JSON.stringify(metadata);
+};
+
 interface ProfileMetadata {
   personal_photo?: string;
   startup_logo?: string;
@@ -76,40 +109,12 @@ interface ProfileMetadata {
   startup_website?: string;
 }
 
-const INITIAL_MOCK_FOUNDERS: DashboardFounder[] = [
-  { name: "Aisha Malik", role: "CEO & Co-founder", company: "NovaTech AI", industry: "AI/ML", stage: "Series A", location: "San Francisco", tags: ["AI/ML", "SaaS", "B2B"], avatar: "AM", rating: 4.9, views: 284, meetings: 32, available: true, verified: true, bio: "Built and scaled 2 AI startups. Ex-Google. Passionate about helping founders navigate product-market fit.", email: "aisha@novatech.io", linkedin: "https://linkedin.com/in/aishamalik", companywebsite: "https://novatech.io" },
-  { name: "Carlos Rivera", role: "Founder", company: "GreenPay", industry: "FinTech", stage: "Seed", location: "New York", tags: ["FinTech", "Payments", "Scaling"], avatar: "CR", rating: 4.8, views: 197, meetings: 18, available: true, verified: true, bio: "Fintech entrepreneur with 8 years experience. Raised $2M seed round. Love helping first-time founders.", email: "carlos@greenpay.co", linkedin: "https://linkedin.com/in/carlosrivera", companywebsite: "https://greenpay.co" },
-  { name: "Priya Nair", role: "Co-founder & CTO", company: "EduBridge", industry: "EdTech", stage: "Pre-seed", location: "London", tags: ["EdTech", "B2C", "Tech"], avatar: "PN", rating: 5.0, views: 341, meetings: 41, available: false, verified: true, bio: "Technical co-founder turned CEO. MIT grad. Passionate about accessible education and early-stage tech.", email: "priya@edubridge.io", linkedin: "https://linkedin.com/in/priyanair", companywebsite: "https://edubridge.io" },
-  { name: "Sam Osei", role: "Founder", company: "HealthSync", industry: "HealthTech", stage: "Series A", location: "Nairobi", tags: ["HealthTech", "Africa", "Impact"], avatar: "SO", rating: 4.7, views: 156, meetings: 24, available: true, verified: true, bio: "Health tech founder operating across East Africa. 3x exits. Mentor at Techstars Africa.", email: "sam@healthsync.co", linkedin: "https://linkedin.com/in/samosei", companywebsite: "https://healthsync.co" },
-  { name: "Lena Müller", role: "CEO", company: "ClimateOps", industry: "ClimaTech", stage: "Seed", location: "Berlin", tags: ["ClimaTech", "B2B"], avatar: "LM", rating: 4.6, views: 122, meetings: 15, available: true, verified: false, bio: "Climate tech CEO building carbon management tools for enterprise. YC S22 alumni.", email: "lena@climateops.de", linkedin: "https://linkedin.com/in/lenamuller", companywebsite: "https://climateops.de" },
-  { name: "David Kim", role: "Co-founder", company: "CryptoEdge", industry: "Web3", stage: "Pre-seed", location: "Singapore", tags: ["Web3", "DeFi"], avatar: "DK", rating: 4.5, views: 98, meetings: 11, available: false, verified: true, bio: "Web3 builder since 2017. Co-founded 3 blockchain protocols. Deep expertise in DeFi and tokenomics.", email: "david@cryptoedge.io", linkedin: "https://linkedin.com/in/davidkim", companywebsite: "https://cryptoedge.io" },
-];
-
-const DEFAULT_AVATAR = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80";
-const DEFAULT_LOGO = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=256&q=80";
-
-const parseBioAndMetadata = (rawBio: string): { bioText: string; metadata: ProfileMetadata } => {
-  const marker = "\n\n---METADATA---\n";
-  if (rawBio && rawBio.includes(marker)) {
-    const parts = rawBio.split(marker);
-    const bioText = parts[0];
-    try {
-      const metadata = JSON.parse(parts[1]);
-      return { bioText, metadata };
-    } catch (e) {
-      console.error("Error parsing profile metadata:", e);
-      return { bioText: rawBio, metadata: {} };
-    }
-  }
-  return { bioText: rawBio || "", metadata: {} };
-};
-
 interface FounderPageProps {
   params: Promise<{ username: string }>;
 }
 
 export default function FounderProfilePage({ params }: FounderPageProps) {
-  const resolvedParams = React.use(params) as { username: string };
+  const resolvedParams = use(params);
   const username = resolvedParams.username;
 
   const [founder, setFounder] = useState<DashboardFounder | null>(null);
@@ -117,6 +122,51 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"personal" | "startup">("personal");
   const [copiedText, setCopiedText] = useState<string | null>(null);
+
+  // Edit / Save states
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [founderId, setFounderId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // File Upload references
+  const personalFileRef = useRef<HTMLInputElement>(null);
+  const startupFileRef = useRef<HTMLInputElement>(null);
+
+  // Editable Personal Profile fields
+  const [name, setName] = useState("");
+  const [bio, setBio] = useState("");
+  const [role, setRole] = useState("");
+  const [personalPhoto, setPersonalPhoto] = useState(DEFAULT_AVATAR);
+  const [skills, setSkills] = useState<string[]>([]);
+  const [fees30m, setFees30m] = useState("30");
+  const [fees1h, setFees1h] = useState("60");
+  const [feesCustomMin, setFeesCustomMin] = useState("20");
+  const [feesCustomVal, setFeesCustomVal] = useState("25");
+
+  // Personal socials
+  const [linkedin, setLinkedin] = useState("");
+  const [twitter, setTwitter] = useState("");
+  const [github, setGithub] = useState("");
+  const [website, setWebsite] = useState("");
+
+  // Editable Startup Profile fields
+  const [startupName, setStartupName] = useState("");
+  const [startupRole, setStartupRole] = useState("");
+  const [startupStage, setStartupStage] = useState("");
+  const [startupCategory, setStartupCategory] = useState("");
+  const [startupLocation, setStartupLocation] = useState("");
+  const [startupTeamSize, setStartupTeamSize] = useState("");
+  const [startupFunding, setStartupFunding] = useState("");
+  const [startupBio, setStartupBio] = useState("");
+  const [startupLogo, setStartupLogo] = useState(DEFAULT_LOGO);
+  
+  // Startup socials
+  const [startupLinkedin, setStartupLinkedin] = useState("");
+  const [startupTwitter, setStartupTwitter] = useState("");
+  const [startupWebsite, setStartupWebsite] = useState("");
+
+  const [newSkillText, setNewSkillText] = useState("");
 
   // Layout states for Sidebar + Header sync
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -153,6 +203,7 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
+          setCurrentUserId(user.id);
           const { data: profileData } = await supabase
             .from("profiles")
             .select("*")
@@ -183,8 +234,9 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
           .select("*");
         
         if (dbFounders && dbFounders.length > 0) {
-          const matchedDb = dbFounders.find(f => getSlug(f.full_name) === username);
+          const matchedDb = dbFounders.find((f: any) => getSlug(f.full_name) === username);
           if (matchedDb) {
+            setFounderId(matchedDb.id);
             const { bioText, metadata: parsed } = parseBioAndMetadata(matchedDb.bio || "");
             matchedMetadata = parsed;
             
@@ -250,13 +302,179 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
         }
       }
 
-      setFounder(finalFounder);
-      setMetadata(matchedMetadata);
+      if (finalFounder) {
+        setFounder(finalFounder);
+        setMetadata(matchedMetadata);
+
+        // Pre-populate states for editing
+        setName(finalFounder.name);
+        setBio(finalFounder.bio || "");
+        setRole(finalFounder.role || "Founder");
+        setPersonalPhoto(matchedMetadata.personal_photo || DEFAULT_AVATAR);
+        setSkills(matchedMetadata.skills || finalFounder.tags || []);
+        
+        setFees30m(matchedMetadata.fees_30m || "30");
+        setFees1h(matchedMetadata.fees_1h || "60");
+        setFeesCustomMin(matchedMetadata.fees_custom_min || "20");
+        setFeesCustomVal(matchedMetadata.fees_custom_val || "25");
+
+        setLinkedin(finalFounder.linkedin || matchedMetadata.startup_linkedin || "");
+        setTwitter(matchedMetadata.startup_twitter || "");
+        setGithub("");
+        setWebsite(finalFounder.companywebsite || matchedMetadata.startup_website || "");
+
+        setStartupName(matchedMetadata.startup_name || finalFounder.company || "TechCo AI");
+        setStartupRole(matchedMetadata.startup_role || finalFounder.role || "Co-founder & CTO");
+        setStartupStage(matchedMetadata.startup_stage || finalFounder.stage || "Series A");
+        setStartupCategory(matchedMetadata.startup_category || finalFounder.industry || "AI / SaaS");
+        setStartupLocation(matchedMetadata.startup_location || finalFounder.location || "Karachi, PK");
+        setStartupTeamSize(matchedMetadata.startup_team_size || "5-10");
+        setStartupFunding(matchedMetadata.startup_funding || "$1M+");
+        setStartupBio(matchedMetadata.startup_bio || "");
+        setStartupLogo(matchedMetadata.startup_logo || DEFAULT_LOGO);
+        setStartupLinkedin(matchedMetadata.startup_linkedin || "");
+        setStartupTwitter(matchedMetadata.startup_twitter || "");
+        setStartupWebsite(matchedMetadata.startup_website || "");
+      }
+
       setLoading(false);
     };
 
     loadData();
   }, [username]);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>, type: "personal" | "startup") => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Image is too large. Please select an image under 5MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        
+        const MAX_WIDTH = 180;
+        const MAX_HEIGHT = 180;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width = Math.round((width * MAX_HEIGHT) / height);
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+        if (type === "personal") {
+          setPersonalPhoto(dataUrl);
+        } else {
+          setStartupLogo(dataUrl);
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async () => {
+    const targetId = founderId || currentUserId;
+    if (!targetId) {
+      alert("Unable to save. User identifier missing.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const updatedMetadata: ProfileMetadata = {
+        personal_photo: personalPhoto,
+        startup_logo: startupLogo,
+        fees_30m: fees30m,
+        fees_1h: fees1h,
+        fees_custom_min: feesCustomMin,
+        fees_custom_val: feesCustomVal,
+        skills,
+        startup_name: startupName,
+        startup_role: startupRole,
+        startup_stage: startupStage,
+        startup_category: startupCategory,
+        startup_location: startupLocation,
+        startup_team_size: startupTeamSize,
+        startup_funding: startupFunding,
+        startup_bio: startupBio,
+        startup_linkedin: startupLinkedin,
+        startup_twitter: startupTwitter,
+        startup_website: startupWebsite
+      };
+
+      const serializedBio = serializeBioAndMetadata(bio, updatedMetadata);
+
+      // Perform upsert so mock records can also be initialized in DB
+      const { error: founderErr } = await supabase
+        .from("founder_profiles")
+        .upsert({
+          id: targetId,
+          full_name: name,
+          bio: serializedBio,
+          company: startupName,
+          role: role,
+          category: startupCategory,
+          twitter,
+          linkedin,
+          website
+        });
+
+      if (founderErr) throw founderErr;
+
+      setMetadata(updatedMetadata);
+      
+      // Update local founder card preview state
+      if (founder) {
+        setFounder({
+          ...founder,
+          name,
+          role,
+          company: startupName,
+          bio,
+          linkedin,
+          companywebsite: website
+        });
+      }
+
+      setEditing(false);
+    } catch (err) {
+      console.error("Error saving founder profile:", err);
+      alert("Failed to save changes. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addSkill = () => {
+    if (newSkillText.trim() && !skills.includes(newSkillText.trim())) {
+      setSkills([...skills, newSkillText.trim()]);
+      setNewSkillText("");
+    }
+  };
+
+  const removeSkill = (indexToRemove: number) => {
+    setSkills(skills.filter((_, i) => i !== indexToRemove));
+  };
 
   const handleCopy = (text: string, type: string) => {
     navigator.clipboard.writeText(text);
@@ -282,6 +500,24 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
       setDeckRequestLoading(false);
       setDeckRequestSent(true);
     }, 1200);
+  };
+
+  const getNextDays = () => {
+    const days = [];
+    const dateNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    
+    for (let i = 1; i <= 5; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() + i);
+      days.push({
+        dayName: dateNames[d.getDay()],
+        dayNum: d.getDate(),
+        month: monthNames[d.getMonth()],
+        fullString: `${dateNames[d.getDay()]} ${monthNames[d.getMonth()]} ${d.getDate()}`
+      });
+    }
+    return days;
   };
 
   const handleActiveTabChange = (tab: string) => {
@@ -310,24 +546,6 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
       </div>
     );
   }
-
-  const getNextDays = () => {
-    const days = [];
-    const dateNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    
-    for (let i = 1; i <= 5; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() + i);
-      days.push({
-        dayName: dateNames[d.getDay()],
-        dayNum: d.getDate(),
-        month: monthNames[d.getMonth()],
-        fullString: `${dateNames[d.getDay()]} ${monthNames[d.getMonth()]} ${d.getDate()}`
-      });
-    }
-    return days;
-  };
 
   const nextDays = getNextDays();
   const timeSlots = ["10:00 AM", "11:30 AM", "2:00 PM", "3:30 PM", "5:00 PM"];
@@ -467,7 +685,6 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
           letter-spacing: 0.05em;
         }
         
-        /* Isolated Profile Switcher Tabs to prevent conflicts with global styles */
         .profile-tab-btn {
           position: relative;
           padding: 16px 24px;
@@ -585,6 +802,10 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
         }
       `}</style>
 
+      {/* Hidden File inputs */}
+      <input type="file" ref={personalFileRef} style={{ display: "none" }} accept="image/*" onChange={(e) => handleImageChange(e, "personal")} />
+      <input type="file" ref={startupFileRef} style={{ display: "none" }} accept="image/*" onChange={(e) => handleImageChange(e, "startup")} />
+
       {/* Sidebar - Desktop and Mobile */}
       <div className={`sidebar-container ${mobileMenuOpen ? "open" : ""}`}>
         <Sidebar 
@@ -608,18 +829,13 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
             </button>
             <div className="greeting-box">
               <span className="welcome-label">Viewing Profile:</span>
-              <span className="user-name-label">{founder.name}</span>
+              <span className="user-name-label">{name}</span>
             </div>
           </div>
         </header>
 
         {/* Dynamic Page Content */}
         <main style={{ flex: 1, padding: "28px 24px", maxWidth: 1200, width: "100%", margin: "0 auto" }}>
-          
-          {/* Back Link */}
-          <Link href="/" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700, color: "var(--primary)", marginBottom: 24 }} className="hover-opacity">
-            <ArrowLeft size={16} /> Back to Directory
-          </Link>
 
           {/* Cover Banner Area */}
           <div className="cover-banner">
@@ -643,46 +859,103 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
               {/* Circular Image frame */}
               <div style={{ position: "relative", width: 104, height: 104, borderRadius: "50%", flexShrink: 0, border: "4px solid #ffffff", background: "#f8fafc", boxShadow: "0 6px 16px rgba(0,0,0,0.08)" }}>
                 <img 
-                  src={activeTab === "personal" ? (metadata.personal_photo || DEFAULT_AVATAR) : (metadata.startup_logo || DEFAULT_LOGO)} 
-                  alt={founder.name}
+                  src={activeTab === "personal" ? personalPhoto : startupLogo} 
+                  alt={name}
                   style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }}
                 />
+                {editing && (
+                  <button 
+                    onClick={() => activeTab === "personal" ? personalFileRef.current?.click() : startupFileRef.current?.click()}
+                    style={{ 
+                      position: "absolute", 
+                      bottom: -2, 
+                      right: -2, 
+                      width: 32, 
+                      height: 32, 
+                      background: "#ffffff", 
+                      border: "1px solid var(--border)", 
+                      borderRadius: "50%", 
+                      display: "flex", 
+                      alignItems: "center", 
+                      justifyContent: "center", 
+                      cursor: "pointer",
+                      boxShadow: "0 3px 6px rgba(0,0,0,0.12)"
+                    }}
+                    title="Change Photo"
+                  >
+                    <Camera size={14} color="var(--text-secondary)" />
+                  </button>
+                )}
               </div>
 
               {/* Name & Taglines */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <h2 style={{ fontSize: 24, fontWeight: 800, margin: 0, fontFamily: "'Syne', sans-serif", letterSpacing: "-0.5px", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-                    {activeTab === "personal" ? founder.name : (metadata.startup_name || founder.company)}
-                  </h2>
+                  {editing ? (
+                    <input 
+                      value={name} 
+                      onChange={e => setName(e.target.value)} 
+                      className="input-field" 
+                      style={{ fontSize: 20, fontWeight: 800, height: 38, width: 220, padding: "0 10px" }}
+                    />
+                  ) : (
+                    <h2 style={{ fontSize: 24, fontWeight: 800, margin: 0, fontFamily: "'Syne', sans-serif", letterSpacing: "-0.5px", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                      {activeTab === "personal" ? name : startupName}
+                    </h2>
+                  )}
                   {founder.verified && <CheckCircle size={18} color="var(--primary)" fill="var(--primary-xlight)" style={{ flexShrink: 0 }} />}
                 </div>
                 
                 {activeTab === "personal" ? (
                   <p style={{ color: "var(--text-secondary)", fontSize: 14, marginTop: 6, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
                     <Briefcase size={14} color="var(--primary)" />
-                    {founder.role} @ <span style={{ fontWeight: 700, color: "var(--text)" }}>{metadata.startup_name || founder.company}</span>
+                    {editing ? (
+                      <input 
+                        value={role} 
+                        onChange={e => setRole(e.target.value)} 
+                        className="input-field" 
+                        style={{ fontSize: 13, height: 32, width: 180, padding: "0 8px" }}
+                      />
+                    ) : (
+                      role
+                    )} @ <span style={{ fontWeight: 700, color: "var(--text)" }}>{startupName}</span>
                   </p>
                 ) : (
                   <p style={{ color: "var(--text-secondary)", fontSize: 14, marginTop: 6, fontWeight: 500, display: "flex", alignItems: "center", gap: 12 }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Building size={14} color="var(--primary)" /> {metadata.startup_stage || founder.stage}</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Building size={14} color="var(--primary)" /> {startupStage}</span>
                     <span style={{ color: "var(--border)" }}>•</span>
-                    <span>{metadata.startup_category || founder.industry}</span>
+                    <span>{startupCategory}</span>
                   </p>
                 )}
               </div>
 
-              {/* Available to Book Badge */}
-              <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
-                <span className="green-tag" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", height: 32, fontSize: 11, background: "var(--primary-xlight)", border: "1px solid var(--primary-100)" }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e", display: "inline-block" }}></span>
-                  Available for Calls
-                </span>
+              {/* Edit / Save controls & verification status */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                {editing ? (
+                  <button 
+                    onClick={handleSave}
+                    className="btn-primary"
+                    style={{ height: 36, padding: "0 18px", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}
+                    disabled={saving}
+                  >
+                    {saving ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />}
+                    {saving ? "Saving..." : "Save"}
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => setEditing(true)}
+                    className="btn-ghost"
+                    style={{ height: 36, padding: "0 18px", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}
+                  >
+                    <Edit3 size={14} />
+                    Edit Profile
+                  </button>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Navigation Switcher Tabs (Isolated Class `.profile-tab-btn` to prevent green-on-green hiding) */}
+          {/* Navigation Switcher Tabs */}
           <div style={{ display: "flex", borderBottom: "1px solid var(--border)", gap: 12, paddingBottom: 0, marginTop: 110 }}>
             <button 
               className={`profile-tab-btn ${activeTab === "personal" ? "active" : ""}`}
@@ -713,11 +986,21 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
                       <div style={{ width: 32, height: 32, background: "var(--primary-xlight)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <User size={15} color="var(--primary)" />
                       </div>
-                      <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>About {founder.name.split(" ")[0]}</h3>
+                      <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>About {name.split(" ")[0]}</h3>
                     </div>
-                    <p style={{ fontSize: 14.5, color: "var(--text-secondary)", lineHeight: 1.75, whiteSpace: "pre-wrap" }}>
-                      {founder.bio || "No biography added yet."}
-                    </p>
+                    {editing ? (
+                      <textarea 
+                        value={bio} 
+                        onChange={e => setBio(e.target.value)} 
+                        className="input-field" 
+                        placeholder="Write your professional bio..."
+                        style={{ height: 130, resize: "none", lineHeight: 1.6 }} 
+                      />
+                    ) : (
+                      <p style={{ fontSize: 14.5, color: "var(--text-secondary)", lineHeight: 1.75, whiteSpace: "pre-wrap" }}>
+                        {bio || "No biography added yet."}
+                      </p>
+                    )}
                   </div>
 
                   {/* Consultation Booking Rates Cards */}
@@ -741,7 +1024,18 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
                           <Clock size={14} color="var(--primary)" /> 30-Min session
                         </div>
                         <div style={{ display: "flex", alignItems: "baseline", gap: 2, margin: "4px 0" }}>
-                          <span style={{ fontSize: 26, fontWeight: 800, color: "var(--primary)", fontFamily: "'Syne', sans-serif" }}>${metadata.fees_30m || "30"}</span>
+                          <span style={{ fontSize: 24, fontWeight: 800, fontFamily: "'Syne', sans-serif" }}>$</span>
+                          {editing ? (
+                            <input 
+                              type="number"
+                              value={fees30m} 
+                              onChange={e => setFees30m(e.target.value)} 
+                              className="input-field"
+                              style={{ padding: "4px 8px", fontSize: 16, width: 70, fontWeight: 700, height: 32, display: "inline-block" }}
+                            />
+                          ) : (
+                            <span style={{ fontSize: 26, fontWeight: 800, color: "var(--primary)", fontFamily: "'Syne', sans-serif" }}>{fees30m}</span>
+                          )}
                           <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>/ call</span>
                         </div>
                         <p style={{ fontSize: 11.5, color: "var(--text-secondary)", minHeight: 34 }}>Quick check-in, advice on product-market fit, or networking.</p>
@@ -750,9 +1044,10 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
                           className="btn-primary" 
                           style={{ width: "100%", height: 38, marginTop: 8, justifyContent: "center", fontSize: 13 }}
                           onClick={() => {
-                            setSelectedRate({ label: "30-Minute Consultation", price: metadata.fees_30m || "30", minutes: "30" });
+                            setSelectedRate({ label: "30-Minute Consultation", price: fees30m, minutes: "30" });
                             setBookingStep("scheduling");
                           }}
+                          disabled={editing}
                         >
                           Book Session
                         </button>
@@ -764,7 +1059,18 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
                           <Clock size={14} color="var(--primary)" /> 1-Hour Session
                         </div>
                         <div style={{ display: "flex", alignItems: "baseline", gap: 2, margin: "4px 0" }}>
-                          <span style={{ fontSize: 26, fontWeight: 800, color: "var(--primary)", fontFamily: "'Syne', sans-serif" }}>${metadata.fees_1h || "60"}</span>
+                          <span style={{ fontSize: 24, fontWeight: 800, fontFamily: "'Syne', sans-serif" }}>$</span>
+                          {editing ? (
+                            <input 
+                              type="number"
+                              value={fees1h} 
+                              onChange={e => setFees1h(e.target.value)} 
+                              className="input-field"
+                              style={{ padding: "4px 8px", fontSize: 16, width: 70, fontWeight: 700, height: 32, display: "inline-block" }}
+                            />
+                          ) : (
+                            <span style={{ fontSize: 26, fontWeight: 800, color: "var(--primary)", fontFamily: "'Syne', sans-serif" }}>{fees1h}</span>
+                          )}
                           <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>/ call</span>
                         </div>
                         <p style={{ fontSize: 11.5, color: "var(--text-secondary)", minHeight: 34 }}>Detailed business review, pitch deck feedback, or architecture setup.</p>
@@ -773,9 +1079,10 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
                           className="btn-primary" 
                           style={{ width: "100%", height: 38, marginTop: 8, justifyContent: "center", fontSize: 13 }}
                           onClick={() => {
-                            setSelectedRate({ label: "1-Hour Strategic Session", price: metadata.fees_1h || "60", minutes: "60" });
+                            setSelectedRate({ label: "1-Hour Strategic Session", price: fees1h, minutes: "60" });
                             setBookingStep("scheduling");
                           }}
+                          disabled={editing}
                         >
                           Book Session
                         </button>
@@ -784,10 +1091,33 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
                       {/* Rate 3 */}
                       <div className="fee-card">
                         <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
-                          <Clock size={14} color="var(--primary)" /> {metadata.fees_custom_min || "20"}-Min Custom
+                          <Clock size={14} color="var(--primary)" /> 
+                          {editing ? (
+                            <input 
+                              type="number"
+                              value={feesCustomMin} 
+                              onChange={e => setFeesCustomMin(e.target.value)} 
+                              className="input-field"
+                              style={{ padding: "2px 6px", fontSize: 12, width: 44, fontWeight: 700, height: 26, display: "inline-block" }}
+                            />
+                          ) : (
+                            feesCustomMin
+                          )}
+                          -Min Custom
                         </div>
                         <div style={{ display: "flex", alignItems: "baseline", gap: 2, margin: "4px 0" }}>
-                          <span style={{ fontSize: 26, fontWeight: 800, color: "var(--primary)", fontFamily: "'Syne', sans-serif" }}>${metadata.fees_custom_val || "25"}</span>
+                          <span style={{ fontSize: 24, fontWeight: 800, fontFamily: "'Syne', sans-serif" }}>$</span>
+                          {editing ? (
+                            <input 
+                              type="number"
+                              value={feesCustomVal} 
+                              onChange={e => setFeesCustomVal(e.target.value)} 
+                              className="input-field"
+                              style={{ padding: "4px 8px", fontSize: 16, width: 70, fontWeight: 700, height: 32, display: "inline-block" }}
+                            />
+                          ) : (
+                            <span style={{ fontSize: 26, fontWeight: 800, color: "var(--primary)", fontFamily: "'Syne', sans-serif" }}>{feesCustomVal}</span>
+                          )}
                           <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>/ call</span>
                         </div>
                         <p style={{ fontSize: 11.5, color: "var(--text-secondary)", minHeight: 34 }}>Custom duration slot set by founder for specific booking demands.</p>
@@ -796,9 +1126,10 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
                           className="btn-primary" 
                           style={{ width: "100%", height: 38, marginTop: 8, justifyContent: "center", fontSize: 13 }}
                           onClick={() => {
-                            setSelectedRate({ label: `${metadata.fees_custom_min || "20"}-Minute Consultation`, price: metadata.fees_custom_val || "25", minutes: metadata.fees_custom_min || "20" });
+                            setSelectedRate({ label: `${feesCustomMin}-Minute Consultation`, price: feesCustomVal, minutes: feesCustomMin });
                             setBookingStep("scheduling");
                           }}
+                          disabled={editing}
                         >
                           Book Session
                         </button>
@@ -815,11 +1146,29 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
                       </div>
                       <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Areas of Expertise</h3>
                     </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      {(metadata.skills || founder.tags).map((skill, i) => (
-                        <span key={i} className="green-tag" style={{ fontSize: 11.5, padding: "5px 14px", fontWeight: 600 }}>{skill}</span>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: editing ? 12 : 0 }}>
+                      {skills.map((skill, i) => (
+                        <span key={i} className="green-tag" style={{ fontSize: 11.5, padding: "5px 14px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          {skill}
+                          {editing && (
+                            <button onClick={() => removeSkill(i)} style={{ background: "none", border: "none", color: "var(--primary)", cursor: "pointer", fontWeight: 800, fontSize: 10 }}>×</button>
+                          )}
+                        </span>
                       ))}
                     </div>
+                    {editing && (
+                      <div style={{ display: "flex", gap: 8, maxWidth: 300, marginTop: 12 }}>
+                        <input 
+                          type="text" 
+                          value={newSkillText}
+                          onChange={e => setNewSkillText(e.target.value)}
+                          placeholder="Add skill tag..."
+                          className="input-field"
+                          style={{ height: 34, padding: "0 12px", fontSize: 13 }}
+                        />
+                        <button onClick={addSkill} className="btn-primary" style={{ height: 34, padding: "0 14px", fontSize: 12 }}><Plus size={12} /> Add</button>
+                      </div>
+                    )}
                   </div>
                 </>
               )}
@@ -835,9 +1184,19 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
                       </div>
                       <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Startup Core Vision</h3>
                     </div>
-                    <p style={{ fontSize: 14.5, color: "var(--text-secondary)", lineHeight: 1.75, whiteSpace: "pre-wrap" }}>
-                      {metadata.startup_bio || `${metadata.startup_name || founder.company} is building revolutionary solutions. Focuses on innovation and high scale.`}
-                    </p>
+                    {editing ? (
+                      <textarea 
+                        value={startupBio} 
+                        onChange={e => setStartupBio(e.target.value)} 
+                        className="input-field" 
+                        placeholder="Write startup bio and vision details..."
+                        style={{ height: 130, resize: "none", lineHeight: 1.6 }} 
+                      />
+                    ) : (
+                      <p style={{ fontSize: 14.5, color: "var(--text-secondary)", lineHeight: 1.75, whiteSpace: "pre-wrap" }}>
+                        {startupBio || `${startupName} is building revolutionary solutions. Focuses on innovation and high scale.`}
+                      </p>
+                    )}
                     
                     {/* Pitch Deck action */}
                     <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 24, borderTop: "1px solid var(--border)", paddingTop: 20, flexWrap: "wrap" }}>
@@ -855,7 +1214,7 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
                             className="btn-outline" 
                             style={{ height: 38, fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6 }}
                             onClick={handleRequestDeck}
-                            disabled={deckRequestLoading}
+                            disabled={deckRequestLoading || editing}
                           >
                             {deckRequestLoading ? (
                               <><Loader2 className="animate-spin" size={14} /> Requesting...</>
@@ -879,17 +1238,27 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
 
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20 }}>
                       {[
-                        { label: "Startup Name", value: metadata.startup_name || founder.company },
-                        { label: "Founder Role", value: metadata.startup_role || founder.role },
-                        { label: "Funding Stage", value: metadata.startup_stage || founder.stage },
-                        { label: "Industry Category", value: metadata.startup_category || founder.industry },
-                        { label: "Headquarters", value: metadata.startup_location || founder.location },
-                        { label: "Team Size", value: metadata.startup_team_size || "5-10" },
-                        { label: "Total Funding", value: metadata.startup_funding || "$1M+" },
-                      ].map((f, i) => (
+                        { label: "Startup Name", value: startupName, set: setStartupName, placeholder: "e.g. TechCo" },
+                        { label: "Founder Role", value: startupRole, set: setStartupRole, placeholder: "e.g. Co-founder & CEO" },
+                        { label: "Funding Stage", value: startupStage, set: setStartupStage, placeholder: "e.g. Series A" },
+                        { label: "Industry Category", value: startupCategory, set: setStartupCategory, placeholder: "e.g. AI / SaaS" },
+                        { label: "Headquarters", value: startupLocation, set: setStartupLocation, placeholder: "e.g. Karachi, PK" },
+                        { label: "Team Size", value: startupTeamSize, set: setStartupTeamSize, placeholder: "e.g. 5-10" },
+                        { label: "Total Funding", value: startupFunding, set: setStartupFunding, placeholder: "e.g. $1M+" },
+                      ].map((f: any, i: number) => (
                         <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                           <span style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>{f.label}</span>
-                          <span style={{ fontSize: 14.5, fontWeight: 600, color: "var(--text)" }}>{f.value}</span>
+                          {editing ? (
+                            <input 
+                              value={f.value} 
+                              onChange={e => f.set(e.target.value)} 
+                              placeholder={f.placeholder}
+                              className="input-field" 
+                              style={{ height: 36, padding: "0 10px", fontSize: 13 }} 
+                            />
+                          ) : (
+                            <span style={{ fontSize: 14.5, fontWeight: 600, color: "var(--text)" }}>{f.value}</span>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -922,7 +1291,7 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
                       <div style={{ marginBottom: 20 }}>
                         <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text)", textTransform: "uppercase", display: "block", marginBottom: 10, letterSpacing: "0.03em" }}>1. Select Meeting Date</span>
                         <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
-                          {nextDays.map((d, i) => (
+                          {nextDays.map((d: any, i: number) => (
                             <div 
                               key={i} 
                               className={`date-pill ${bookingDate === d.fullString ? "active" : ""}`}
@@ -978,7 +1347,7 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
                       <div>
                         <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--text)", fontFamily: "'Syne', sans-serif" }}>Consultation Requested!</h3>
                         <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 6, maxWidth: 360, lineHeight: 1.5 }}>
-                          Your calendar request has been forwarded to <strong>{founder.name}</strong>. You will receive an email invite containing the video room link as soon as they confirm!
+                          Your calendar request has been forwarded to <strong>{name}</strong>. You will receive an email invite containing the video room link as soon as they confirm!
                         </p>
                       </div>
                       <div style={{ background: "var(--bg-soft)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 18px", width: "100%", maxWidth: 340, textAlign: "left" }}>
@@ -1017,88 +1386,89 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
                   {activeTab === "personal" ? (
                     /* Personal Links with authentic colors */
                     <>
-                      {metadata.startup_linkedin || founder.linkedin ? (
-                        <a 
-                          href={(metadata.startup_linkedin || founder.linkedin).startsWith("http") ? (metadata.startup_linkedin || founder.linkedin) : `https://${metadata.startup_linkedin || founder.linkedin}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="social-link-item"
-                        >
-                          <div className="social-logo-container">
-                            <LinkedInLogo size={16} />
-                          </div>
-                          <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", flex: 1 }}>LinkedIn Profile</span>
-                          <ExternalLink size={12} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
-                        </a>
-                      ) : (
-                        <div style={{ color: "var(--text-secondary)", fontSize: 12.5, fontStyle: "italic", padding: "10px 12px" }}>No LinkedIn profile listed.</div>
-                      )}
-
-                      {metadata.startup_twitter ? (
-                        <a 
-                          href={`https://twitter.com/${metadata.startup_twitter.replace('@', '')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="social-link-item"
-                        >
-                          <div className="social-logo-container">
-                            <TwitterXLogo size={14} />
-                          </div>
-                          <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", flex: 1 }}>Twitter / X Profile</span>
-                          <ExternalLink size={12} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
-                        </a>
-                      ) : null}
-
-                      {metadata.startup_website || founder.companywebsite ? (
-                        <a 
-                          href={(metadata.startup_website || founder.companywebsite).startsWith("http") ? (metadata.startup_website || founder.companywebsite) : `https://${metadata.startup_website || founder.companywebsite}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="social-link-item"
-                        >
-                          <div className="social-logo-container">
-                            <GlobeLogo size={16} />
-                          </div>
-                          <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", flex: 1 }}>Personal Portfolio</span>
-                          <ExternalLink size={12} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
-                        </a>
-                      ) : null}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                        {[
+                          { logo: LinkedInLogo, label: "LinkedIn", val: linkedin, set: setLinkedin, placeholder: "linkedin.com/in/username" },
+                          { logo: TwitterXLogo, label: "Twitter / X", val: twitter, set: setTwitter, placeholder: "@handle" },
+                          { logo: GlobeLogo, label: "Website", val: website, set: setWebsite, placeholder: "website.com" }
+                        ].map((s: any, i: number) => {
+                          const Logo = s.logo;
+                          return (
+                            <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              {editing ? (
+                                <>
+                                  <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 4 }}><Logo size={12} /> {s.label}</span>
+                                  <input 
+                                    value={s.val} 
+                                    onChange={e => s.set(e.target.value)} 
+                                    placeholder={s.placeholder}
+                                    className="input-field" 
+                                    style={{ height: 34, padding: "0 10px", fontSize: 13 }}
+                                  />
+                                </>
+                              ) : (
+                                s.val && (
+                                  <a 
+                                    href={s.val.startsWith("http") ? s.val : `https://${s.val}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="social-link-item"
+                                  >
+                                    <div className="social-logo-container">
+                                      <Logo size={16} />
+                                    </div>
+                                    <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", flex: 1 }}>{s.label} Profile</span>
+                                    <ExternalLink size={12} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
+                                  </a>
+                                )
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </>
                   ) : (
                     /* Startup Links */
-                    <>
-                      {metadata.startup_website || founder.companywebsite ? (
-                        <a 
-                          href={(metadata.startup_website || founder.companywebsite).startsWith("http") ? (metadata.startup_website || founder.companywebsite) : `https://${metadata.startup_website || founder.companywebsite}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="social-link-item"
-                        >
-                          <div className="social-logo-container">
-                            <GlobeLogo size={16} />
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      {[
+                        { logo: GlobeLogo, label: "Company Website", val: startupWebsite, set: setStartupWebsite, placeholder: "companywebsite.com" },
+                        { logo: LinkedInLogo, label: "Company LinkedIn", val: startupLinkedin, set: setStartupLinkedin, placeholder: "linkedin.com/company/startup" },
+                        { logo: TwitterXLogo, label: "Company Twitter / X", val: startupTwitter, set: setStartupTwitter, placeholder: "@company" }
+                      ].map((s: any, i: number) => {
+                        const Logo = s.logo;
+                        return (
+                          <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                            {editing ? (
+                              <>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 4 }}><Logo size={12} /> {s.label}</span>
+                                <input 
+                                  value={s.val} 
+                                  onChange={e => s.set(e.target.value)} 
+                                  placeholder={s.placeholder}
+                                  className="input-field" 
+                                  style={{ height: 34, padding: "0 10px", fontSize: 13 }}
+                                />
+                              </>
+                            ) : (
+                              s.val && (
+                                <a 
+                                  href={s.val.startsWith("http") ? s.val : `https://${s.val}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="social-link-item"
+                                >
+                                  <div className="social-logo-container">
+                                    <Logo size={16} />
+                                  </div>
+                                  <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", flex: 1 }}>{s.label}</span>
+                                  <ExternalLink size={12} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
+                                </a>
+                              )
+                            )}
                           </div>
-                          <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", flex: 1 }}>Company Website</span>
-                          <ExternalLink size={12} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
-                        </a>
-                      ) : (
-                        <div style={{ color: "var(--text-secondary)", fontSize: 12.5, fontStyle: "italic", padding: "10px 12px" }}>No startup website listed.</div>
-                      )}
-
-                      {metadata.startup_linkedin ? (
-                        <a 
-                          href={(metadata.startup_linkedin).startsWith("http") ? (metadata.startup_linkedin) : `https://${metadata.startup_linkedin}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="social-link-item"
-                        >
-                          <div className="social-logo-container">
-                            <LinkedInLogo size={16} />
-                          </div>
-                          <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", flex: 1 }}>Company LinkedIn</span>
-                          <ExternalLink size={12} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
-                        </a>
-                      ) : null}
-                    </>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               </div>
@@ -1115,11 +1485,11 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 10, color: "var(--text-secondary)", textTransform: "uppercase", fontWeight: 700 }}>Email Address</div>
                       <div style={{ fontSize: 13, color: "var(--text)", fontWeight: 600, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", marginTop: 2 }}>
-                        {founder.email || "aisha@novatech.io"}
+                        {founder.email || "founder-contact@founivo.io"}
                       </div>
                     </div>
                     <button 
-                      onClick={() => handleCopy(founder.email || "aisha@novatech.io", 'email')}
+                      onClick={() => handleCopy(founder.email || "founder-contact@founivo.io", 'email')}
                       style={{ background: "none", border: "none", color: "var(--primary)", fontSize: 11, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}
                     >
                       {copiedText === 'email' ? 'Copied!' : 'Copy'}
@@ -1148,10 +1518,10 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
                   <div>
                     <h4 style={{ fontSize: 13.5, fontWeight: 700, color: "var(--primary)" }}>Direct Messaging</h4>
                     <p style={{ fontSize: 11.5, color: "var(--text-secondary)", marginTop: 4, lineHeight: 1.5 }}>
-                      Investors or founders who have booked a call can chat with {founder.name} directly via Founivo Messages.
+                      Investors or founders who have booked a call can chat with {name} directly via Founivo Messages.
                     </p>
                     <Link href="/messages" style={{ textDecoration: "none" }}>
-                      <button className="btn-primary" style={{ width: "100%", justifyContent: "center", padding: "8px 14px", fontSize: 12, height: 36, marginTop: 12 }}>
+                      <button className="btn-primary" style={{ width: "100%", justifyContent: "center", padding: "8px 14px", fontSize: 12, height: 36, marginTop: 12 }} disabled={editing}>
                         Send Message
                       </button>
                     </Link>
