@@ -80,7 +80,17 @@ export default function DashboardClient() {
             .select("*")
             .eq("id", user.id)
             .single();
-          setProfile(profileData);
+
+          const { data: prefData } = await supabase
+            .from("user_preferences")
+            .select("*")
+            .eq("id", user.id)
+            .maybeSingle();
+
+          setProfile({
+            ...profileData,
+            preferences: prefData
+          });
         }
       } catch (err) {
         console.error("Error loading user profile:", err);

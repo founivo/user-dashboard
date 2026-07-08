@@ -14,6 +14,19 @@ export default function Sidebar({ activeTab, setActiveTab, profile }: Props) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
 
+  const getAvatarUrl = () => {
+    const purpose = profile?.preferences?.purpose || "";
+    const marker = "\n\n---METADATA---\n";
+    if (purpose.includes(marker)) {
+      try {
+        const meta = JSON.parse(purpose.split(marker)[1]);
+        return meta.avatar || null;
+      } catch (e) {}
+    }
+    return null;
+  };
+  const userAvatarUrl = getAvatarUrl();
+
   const nav = [
     { id: "discover", label: "Discover", icon: LayoutDashboard },
     { id: "search", label: "Find Founders", icon: Search },
@@ -146,9 +159,15 @@ export default function Sidebar({ activeTab, setActiveTab, profile }: Props) {
             width: 38, 
             height: 38, 
             fontSize: 13, 
-            background: "linear-gradient(135deg, var(--primary), var(--primary-light))" 
+            background: "linear-gradient(135deg, var(--primary), var(--primary-light))",
+            position: "relative",
+            overflow: "hidden"
           }}>
-            {getInitials(profile?.full_name || "User")}
+            {userAvatarUrl ? (
+              <img src={userAvatarUrl} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            ) : (
+              getInitials(profile?.full_name || "User")
+            )}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ 
