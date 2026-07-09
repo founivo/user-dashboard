@@ -144,14 +144,25 @@ export default function DashboardClient() {
     });
   };
 
-  const content: Record<string, React.ReactNode> = {
-    discover: <Discover savedFounders={savedFounders} toggleSave={toggleSave} />,
-    search: <FindFounders savedFounders={savedFounders} toggleSave={toggleSave} />,
-    messages: <Messages />,
-    saved: <Saved savedFounders={savedFounders} toggleSave={toggleSave} />,
-    billing: <Billing />,
-    settings: <Settings />,
-    notifications: <Notifications />,
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "discover":
+        return <Discover savedFounders={savedFounders} toggleSave={toggleSave} />;
+      case "search":
+        return <FindFounders savedFounders={savedFounders} toggleSave={toggleSave} />;
+      case "messages":
+        return <Messages />;
+      case "saved":
+        return <Saved savedFounders={savedFounders} toggleSave={toggleSave} />;
+      case "billing":
+        return <Billing />;
+      case "settings":
+        return <Settings />;
+      case "notifications":
+        return <Notifications />;
+      default:
+        return <Discover savedFounders={savedFounders} toggleSave={toggleSave} />;
+    }
   };
 
   if (syncing) {
@@ -228,7 +239,7 @@ export default function DashboardClient() {
 
         {/* Dynamic page content */}
         <main style={{ flex: 1, padding: "28px 24px", maxWidth: 1200, width: "100%", margin: "0 auto" }}>
-          {content[activeTab] ?? <Discover savedFounders={savedFounders} toggleSave={toggleSave} />}
+          {renderTabContent()}
         </main>
       </div>
 

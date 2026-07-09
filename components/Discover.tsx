@@ -94,10 +94,7 @@ export default function Discover({ savedFounders, toggleSave }: DiscoverProps) {
   const supabase = createClient();
 
   useEffect(() => {
-    const sheetUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_CSV_URL;
-
     const loadFounders = async () => {
-      let sheetsFounders: DashboardFounder[] = [];
       let dbMappedFounders: DashboardFounder[] = [];
 
       try {
@@ -133,28 +130,7 @@ export default function Discover({ savedFounders, toggleSave }: DiscoverProps) {
         console.error("Failed to query live database profiles:", err);
       }
 
-      try {
-        if (sheetUrl) {
-          const { fetchFoundersFromGoogleSheet } = await import("@/app/lib/googleSheets");
-          const data = await fetchFoundersFromGoogleSheet(sheetUrl);
-          if (data && data.length > 0) {
-            sheetsFounders = data;
-          }
-        }
-      } catch (err) {
-        console.error("Failed to load Google Sheet, using fallback.", err);
-      }
-
-      const mergedList = [...dbMappedFounders];
-      sheetsFounders.forEach(sf => {
-        const nameSlug = getSlug(sf.name);
-        const exists = dbMappedFounders.some(dbf => getSlug(dbf.name) === nameSlug);
-        if (!exists) {
-          mergedList.push(sf);
-        }
-      });
-
-      setFoundersList(mergedList);
+      setFoundersList(dbMappedFounders);
     };
 
     loadFounders();
