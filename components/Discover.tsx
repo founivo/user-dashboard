@@ -6,31 +6,33 @@ import {
   MapPin, Bot, CreditCard, Activity, BookOpen, Settings, Link as LinkIcon, Loader2
 } from "lucide-react";
 import { createClient } from "@/app/utils/supabase/client";
+import Link from "next/link";
+import { getSlug } from "./FindFounders";
 
 const featured = [
   { 
-    name: "Aisha Malik", role: "CEO & Co-founder", company: "NovaTech AI", 
-    tags: ["AI/ML", "SaaS"], stage: "Series A", location: "San Francisco",
-    avatar: "AM", rating: 4.9, meetings: 32, views: 284, available: true, verified: true,
-    bio: "Built and scaled 2 AI startups. Ex-Google. Passionate about helping founders navigate product-market fit."
+    name: "Bilal Raza", role: "Co-founder & CEO", company: "Founivo", 
+    tags: ["AI/ML", "SaaS"], stage: "Seed", location: "Pakistan",
+    avatar: "BR", rating: 4.9, meetings: 45, views: 312, available: true, verified: true,
+    bio: "Building Founivo to connect elite startup founders. Software engineer, passionate about AI agent workflows and product growth."
   },
   { 
-    name: "Carlos Rivera", role: "Founder", company: "GreenPay", 
-    tags: ["FinTech", "Scaling"], stage: "Seed", location: "New York",
-    avatar: "CR", rating: 4.8, meetings: 18, views: 197, available: true, verified: true,
-    bio: "Fintech entrepreneur with 8 years experience. Raised $2M seed round. Love helping first-time founders."
+    name: "Nehal Raza", role: "Co-founder & CTO", company: "Founivo", 
+    tags: ["SaaS", "Scaling"], stage: "Seed", location: "Pakistan",
+    avatar: "NR", rating: 5.0, meetings: 32, views: 284, available: true, verified: true,
+    bio: "Co-founder & CTO at Founivo. Ex-Software Architect. Passionate about next-gen frontend engineering, database optimization, and web performance."
   },
   { 
-    name: "Sam Osei", role: "Founder", company: "HealthSync", 
-    tags: ["HealthTech", "B2C"], stage: "Series A", location: "Nairobi",
-    avatar: "SO", rating: 4.7, meetings: 45, views: 312, available: true, verified: true,
-    bio: "Healthcare innovator focusing on telemedicine in emerging markets. Looking for strategic partnerships."
+    name: "Hamza Sheikh", role: "Founder & CEO", company: "DealFlow", 
+    tags: ["FinTech", "B2B"], stage: "Pre-seed", location: "Pakistan",
+    avatar: "HS", rating: 4.8, meetings: 18, views: 156, available: true, verified: true,
+    bio: "Fintech innovator building payment infrastructure for businesses in Pakistan. Passionate about financial inclusion."
   },
   { 
-    name: "Lena Müller", role: "CEO", company: "ClimateOps", 
-    tags: ["ClimaTech", "B2B"], stage: "Seed", location: "Berlin",
-    avatar: "LM", rating: 4.6, meetings: 12, views: 156, available: false, verified: true,
-    bio: "Decarbonizing supply chains using blockchain. Former consultant with a mission to save the planet."
+    name: "Zainab Khan", role: "Co-founder", company: "HealthAI", 
+    tags: ["HealthTech", "AI/ML"], stage: "Seed", location: "Pakistan",
+    avatar: "ZK", rating: 4.7, meetings: 24, views: 197, available: true, verified: true,
+    bio: "Building AI tools for radiology and diagnostics. Medical researcher turned tech entrepreneur."
   },
 ];
 
@@ -43,13 +45,13 @@ const categories = [
   { label: "Web3 & Crypto", count: 45, icon: LinkIcon },
 ];
 
-export default function Discover() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [savedStatus, setSavedStatus] = useState<Record<string, boolean>>({});
+interface DiscoverProps {
+  savedFounders: string[];
+  toggleSave: (name: string) => void;
+}
 
-  const toggleSave = (name: string) => {
-    setSavedStatus(prev => ({ ...prev, [name]: !prev[name] }));
-  };
+export default function Discover({ savedFounders, toggleSave }: DiscoverProps) {
+  const [searchQuery, setSearchQuery] = useState("");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 32 }} className="fade-in">
@@ -121,7 +123,7 @@ export default function Discover() {
                   onClick={() => toggleSave(f.name)}
                   style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}
                 >
-                  <Bookmark size={15} color={savedStatus[f.name] ? "var(--primary)" : "var(--text-muted)"} fill={savedStatus[f.name] ? "var(--primary)" : "none"} />
+                  <Bookmark size={15} color={savedFounders.includes(f.name) ? "var(--primary)" : "var(--text-muted)"} fill={savedFounders.includes(f.name) ? "var(--primary)" : "none"} />
                 </button>
               </div>
 
@@ -139,8 +141,12 @@ export default function Discover() {
                   <span style={{ fontSize: 11, fontWeight: 700 }}>{f.rating}</span>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button className="card-btn-outline">Profile</button>
-                  <button className="card-btn-primary">Connect</button>
+                  <Link href={`/founder/${getSlug(f.name)}`}>
+                    <button className="card-btn-outline">Profile</button>
+                  </Link>
+                  <Link href={`/founder/${getSlug(f.name)}`}>
+                    <button className="card-btn-primary">Connect</button>
+                  </Link>
                 </div>
               </div>
             </div>

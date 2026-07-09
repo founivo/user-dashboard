@@ -1,22 +1,140 @@
 "use client";
-import { useState } from "react";
-import { Bookmark, Star, MessageSquare, Eye, Trash2, MapPin, CheckCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Bookmark, Star, MessageSquare, Eye, Trash2, MapPin, CheckCircle, Loader2 } from "lucide-react";
+import { createClient } from "@/app/utils/supabase/client";
+import { DashboardFounder } from "@/app/lib/googleSheets";
+import Link from "next/link";
+import { getSlug } from "./FindFounders";
 
-const initialSaved = [
-  { name: "Aisha Malik", role: "CEO & Co-founder", company: "NovaTech AI", tags: ["AI/ML", "SaaS"], stage: "Series A", location: "San Francisco", avatar: "AM", rating: 4.9, savedAt: "2 days ago", verified: true, meetings: 32, bio: "Built and scaled 2 AI startups. Ex-Google. Passionate about helping founders navigate product-market fit." },
-  { name: "Carlos Rivera", role: "Founder", company: "GreenPay", tags: ["FinTech", "Payments"], stage: "Seed", location: "New York", avatar: "CR", rating: 4.8, savedAt: "3 days ago", verified: true, meetings: 18, bio: "Fintech entrepreneur with 8 years experience. Raised $2M seed round. Love helping first-time founders." },
-  { name: "Sam Osei", role: "Founder", company: "HealthSync", tags: ["HealthTech"], stage: "Series A", location: "Nairobi", avatar: "SO", rating: 4.7, savedAt: "1 week ago", verified: true, meetings: 45, bio: "Healthcare innovator focusing on telemedicine in emerging markets. Looking for strategic partnerships." },
-  { name: "Lena Müller", role: "CEO", company: "ClimateOps", tags: ["ClimaTech", "B2B"], stage: "Seed", location: "Berlin", avatar: "LM", rating: 4.6, savedAt: "1 week ago", verified: false, meetings: 12, bio: "Decarbonizing supply chains using blockchain. Former consultant with a mission to save the planet." },
-  { name: "Priya Nair", role: "Co-founder & CTO", company: "EduBridge", tags: ["EdTech"], stage: "Pre-seed", location: "London", avatar: "PN", rating: 5.0, savedAt: "2 weeks ago", verified: true, meetings: 41, bio: "Technical co-founder turned CEO. MIT grad. Passionate about accessible education and early-stage tech." },
-  { name: "David Kim", role: "Co-founder", company: "CryptoEdge", tags: ["Web3", "DeFi"], stage: "Pre-seed", location: "Singapore", avatar: "DK", rating: 4.5, savedAt: "3 weeks ago", verified: true, meetings: 8, bio: "Building the next generation of decentralized exchanges. Deep background in quantitative trading." },
+interface ProfileMetadata {
+  personal_photo?: string;
+  startup_logo?: string;
+  fees_30m?: string;
+  fees_1h?: string;
+  fees_custom_min?: string;
+  fees_custom_val?: string;
+  skills?: string[];
+  
+  startup_name?: string;
+  startup_stage?: string;
+  startup_category?: string;
+  startup_location?: string;
+  startup_team_size?: string;
+  startup_funding?: string;
+  startup_bio?: string;
+  startup_linkedin?: string;
+  startup_twitter?: string;
+  startup_website?: string;
+}
+
+const parseBioAndMetadata = (rawBio: string): { bioText: string; metadata: ProfileMetadata } => {
+  const marker = "\n\n---METADATA---\n";
+  if (rawBio && rawBio.includes(marker)) {
+    const parts = rawBio.split(marker);
+    const bioText = parts[0];
+    try {
+      const metadata = JSON.parse(parts[1]);
+      return { bioText, metadata };
+    } catch (e) {
+      console.error("Error parsing profile metadata:", e);
+      return { bioText: rawBio, metadata: {} };
+    }
+  }
+  return { bioText: rawBio || "", metadata: {} };
+};
+
+const INITIAL_MOCK_FOUNDERS: DashboardFounder[] = [
+  { name: "Bilal Raza", role: "Co-founder & CEO", company: "Founivo", industry: "AI/ML", stage: "Seed", location: "Pakistan", tags: ["AI/ML", "SaaS", "B2B"], avatar: "BR", rating: 4.9, views: 312, meetings: 45, available: true, verified: true, bio: "Building Founivo to connect elite startup founders. Software engineer, passionate about AI agent workflows and product growth.", email: "bilal@founivo.com", linkedin: "https://linkedin.com/in/bilalraza", companywebsite: "https://founivo.com" },
+  { name: "Nehal Raza", role: "Co-founder & CTO", company: "Founivo", industry: "SaaS", stage: "Seed", location: "Pakistan", tags: ["SaaS", "Scaling", "Full Stack"], avatar: "NR", rating: 5.0, views: 284, meetings: 32, available: true, verified: true, bio: "Co-founder & CTO at Founivo. Ex-Software Architect. Passionate about next-gen frontend engineering, database optimization, and web performance.", email: "nehal@founivo.com", linkedin: "https://linkedin.com/in/nehalraza", companywebsite: "https://founivo.com" },
+  { name: "Hamza Sheikh", role: "Founder & CEO", company: "DealFlow", industry: "FinTech", stage: "Pre-seed", location: "Pakistan", tags: ["FinTech", "Payments", "B2B"], avatar: "HS", rating: 4.8, views: 156, meetings: 18, available: true, verified: true, bio: "Fintech innovator building payment infrastructure for businesses in Pakistan. Passionate about financial inclusion.", email: "hamza@dealflow.pk", linkedin: "https://linkedin.com/in/hamzasheikh", companywebsite: "https://dealflow.pk" },
+  { name: "Zainab Khan", role: "Co-founder", company: "HealthAI", industry: "HealthTech", stage: "Seed", location: "Pakistan", tags: ["HealthTech", "AI/ML", "MedTech"], avatar: "ZK", rating: 4.7, views: 197, meetings: 24, available: true, verified: true, bio: "Building AI tools for radiology and diagnostics. Medical researcher turned tech entrepreneur.", email: "zainab@healthai.pk", linkedin: "https://linkedin.com/in/zainabkhan", companywebsite: "https://healthai.pk" },
+  { name: "Sarah Ahmed", role: "Founder", company: "Edubase", industry: "EdTech", stage: "Pre-seed", location: "Pakistan", tags: ["EdTech", "B2C", "E-Learning"], avatar: "SA", rating: 4.6, views: 122, meetings: 15, available: true, verified: true, bio: "Ex-educator building gamified learning environments for local school children. Passionate about primary education.", email: "sarah@edubase.pk", linkedin: "https://linkedin.com/in/sarahahmed", companywebsite: "https://edubase.pk" },
+  { name: "Muhammad Ali", role: "Co-founder & CTO", company: "Web3Space", industry: "Web3", stage: "Seed", location: "Pakistan", tags: ["Web3", "Blockchain", "DeFi"], avatar: "MA", rating: 4.5, views: 98, meetings: 11, available: false, verified: true, bio: "Decentralized applications developer and smart contract auditor. Helping brands transition into the Web3 space.", email: "ali@web3space.io", linkedin: "https://linkedin.com/in/muhammadali", companywebsite: "https://web3space.io" },
 ];
 
-export default function Saved() {
-  const [savedList, setSavedList] = useState(initialSaved);
+interface SavedProps {
+  savedFounders: string[];
+  toggleSave: (name: string) => void;
+}
 
-  const removeBookmark = (name: string) => {
-    setSavedList(prev => prev.filter(f => f.name !== name));
-  };
+export default function Saved({ savedFounders, toggleSave }: SavedProps) {
+  const [foundersList, setFoundersList] = useState<DashboardFounder[]>([]);
+  const [loading, setLoading] = useState(false);
+  const supabase = createClient();
+
+  useEffect(() => {
+    const sheetUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_CSV_URL;
+
+    const loadFounders = async () => {
+      setLoading(true);
+      let sheetsFounders: DashboardFounder[] = [];
+      let dbMappedFounders: DashboardFounder[] = [];
+
+      try {
+        const { data: dbFounders } = await supabase
+          .from("founder_profiles")
+          .select("*");
+        
+        if (dbFounders) {
+          dbMappedFounders = dbFounders.map((f: any) => {
+            const { bioText, metadata: parsed } = parseBioAndMetadata(f.bio || "");
+            return {
+              name: f.full_name,
+              role: f.role || "Founder",
+              company: f.company || parsed.startup_name || "Stealth Startup",
+              industry: parsed.startup_category || f.category || "AI/ML",
+              stage: parsed.startup_stage || "Seed",
+              location: parsed.startup_location || "Pakistan",
+              tags: parsed.skills || ["Founder", "Tech Startup"],
+              avatar: parsed.personal_photo || f.full_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
+              rating: 4.9,
+              views: 142,
+              meetings: 0,
+              available: true,
+              verified: true,
+              bio: bioText,
+              email: "founder-contact@founivo.io",
+              linkedin: f.linkedin || parsed.startup_linkedin || "",
+              companywebsite: f.website || parsed.startup_website || ""
+            };
+          });
+        }
+      } catch (err) {
+        console.error("Failed to query live database profiles:", err);
+      }
+
+      try {
+        if (sheetUrl) {
+          const { fetchFoundersFromGoogleSheet } = await import("@/app/lib/googleSheets");
+          const data = await fetchFoundersFromGoogleSheet(sheetUrl);
+          if (data && data.length > 0) {
+            sheetsFounders = data;
+          }
+        } else {
+          sheetsFounders = INITIAL_MOCK_FOUNDERS;
+        }
+      } catch (err) {
+        console.error("Failed to load Google Sheet, using mock data.", err);
+        sheetsFounders = INITIAL_MOCK_FOUNDERS;
+      }
+
+      const mergedList = [...dbMappedFounders];
+      sheetsFounders.forEach(sf => {
+        const nameSlug = getSlug(sf.name);
+        const exists = dbMappedFounders.some(dbf => getSlug(dbf.name) === nameSlug);
+        if (!exists) {
+          mergedList.push(sf);
+        }
+      });
+
+      setFoundersList(mergedList);
+      setLoading(false);
+    };
+
+    loadFounders();
+  }, [supabase]);
+
+  const savedList = foundersList.filter(f => savedFounders.includes(f.name));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }} className="fade-in">
@@ -31,7 +149,11 @@ export default function Saved() {
         <span className="green-tag">{savedList.length} bookmarked</span>
       </div>
 
-      {savedList.length === 0 ? (
+      {loading ? (
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "40vh" }}>
+          <Loader2 className="animate-spin" size={32} color="var(--primary)" />
+        </div>
+      ) : savedList.length === 0 ? (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "40vh", background: "#ffffff", border: "1px dashed var(--border)", borderRadius: "20px", padding: 40, textAlign: "center" }}>
           <Bookmark size={36} color="var(--text-muted)" style={{ marginBottom: 12 }} />
           <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>No bookmarked founders yet</h3>
@@ -44,7 +166,13 @@ export default function Saved() {
             <div key={i} className="founder-compact-card">
               <div style={{ display: "flex", gap: 12, alignItems: "start" }}>
                 <div style={{ position: "relative", flexShrink: 0 }}>
-                  <div className="avatar" style={{ width: 44, height: 44, fontSize: 14, background: "linear-gradient(135deg, var(--primary), var(--primary-light))" }}>{f.avatar}</div>
+                  <div className="avatar" style={{ width: 44, height: 44, fontSize: 14, background: "linear-gradient(135deg, var(--primary), var(--primary-light))", position: "relative", overflow: "hidden" }}>
+                    {f.avatar && (f.avatar.startsWith("data:image") || f.avatar.startsWith("http")) ? (
+                      <img src={f.avatar} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt={f.name} />
+                    ) : (
+                      f.avatar
+                    )}
+                  </div>
                   <div style={{ position: "absolute", bottom: 0, right: 0, width: 12, height: 12, background: "var(--primary)", borderRadius: "50%", border: "2px solid white" }} />
                 </div>
 
@@ -61,7 +189,7 @@ export default function Saved() {
                 </div>
 
                 <button 
-                  onClick={() => removeBookmark(f.name)}
+                  onClick={() => toggleSave(f.name)}
                   style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}
                   title="Remove bookmark"
                 >
@@ -83,8 +211,12 @@ export default function Saved() {
                   <span style={{ fontSize: 11, fontWeight: 700 }}>{f.rating}</span>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button className="card-btn-outline">Profile</button>
-                  <button className="card-btn-primary">Connect</button>
+                  <Link href={`/founder/${getSlug(f.name)}`}>
+                    <button className="card-btn-outline">Profile</button>
+                  </Link>
+                  <Link href={`/founder/${getSlug(f.name)}`}>
+                    <button className="card-btn-primary">Connect</button>
+                  </Link>
                 </div>
               </div>
             </div>

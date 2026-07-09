@@ -29,6 +29,28 @@ export default function DashboardClient() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const supabase = createClient();
 
+  // Shared state for saved founders
+  const [savedFounders, setSavedFounders] = useState<string[]>([]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("founivo-saved-founders");
+    if (saved) {
+      try {
+        setSavedFounders(JSON.parse(saved));
+      } catch (e) {
+        console.error("Error parsing saved founders:", e);
+      }
+    }
+  }, []);
+
+  const toggleSave = (name: string) => {
+    setSavedFounders(prev => {
+      const next = prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name];
+      localStorage.setItem("founivo-saved-founders", JSON.stringify(next));
+      return next;
+    });
+  };
+
   // Read initial tab parameter from URL if present
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -117,10 +139,10 @@ export default function DashboardClient() {
   };
 
   const content: Record<string, React.ReactNode> = {
-    discover: <Discover />,
-    search: <FindFounders />,
+    discover: <Discover savedFounders={savedFounders} toggleSave={toggleSave} />,
+    search: <FindFounders savedFounders={savedFounders} toggleSave={toggleSave} />,
     messages: <Messages />,
-    saved: <Saved />,
+    saved: <Saved savedFounders={savedFounders} toggleSave={toggleSave} />,
     billing: <Billing />,
     settings: <Settings />,
     notifications: <Notifications />,
@@ -200,7 +222,7 @@ export default function DashboardClient() {
 
         {/* Dynamic page content */}
         <main style={{ flex: 1, padding: "28px 24px", maxWidth: 1200, width: "100%", margin: "0 auto" }}>
-          {content[activeTab] ?? <Discover />}
+          {content[activeTab] ?? <Discover savedFounders={savedFounders} toggleSave={toggleSave} />}
         </main>
       </div>
 

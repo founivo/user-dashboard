@@ -48,24 +48,28 @@ const parseBioAndMetadata = (rawBio: string): { bioText: string; metadata: Profi
 };
 
 const INITIAL_MOCK_FOUNDERS: DashboardFounder[] = [
-  { name: "Aisha Malik", role: "CEO & Co-founder", company: "NovaTech AI", industry: "AI/ML", stage: "Series A", location: "San Francisco", tags: ["AI/ML", "SaaS", "B2B"], avatar: "AM", rating: 4.9, views: 284, meetings: 32, available: true, verified: true, bio: "Built and scaled 2 AI startups. Ex-Google. Passionate about helping founders navigate product-market fit.", email: "aisha@novatech.io", linkedin: "https://linkedin.com/in/aishamalik", companywebsite: "https://novatech.io" },
-  { name: "Carlos Rivera", role: "Founder", company: "GreenPay", industry: "FinTech", stage: "Seed", location: "New York", tags: ["FinTech", "Payments", "Scaling"], avatar: "CR", rating: 4.8, views: 197, meetings: 18, available: true, verified: true, bio: "Fintech entrepreneur with 8 years experience. Raised $2M seed round. Love helping first-time founders.", email: "carlos@greenpay.co", linkedin: "https://linkedin.com/in/carlosrivera", companywebsite: "https://greenpay.co" },
-  { name: "Priya Nair", role: "Co-founder & CTO", company: "EduBridge", industry: "EdTech", stage: "Pre-seed", location: "London", tags: ["EdTech", "B2C", "Tech"], avatar: "PN", rating: 5.0, views: 341, meetings: 41, available: false, verified: true, bio: "Technical co-founder turned CEO. MIT grad. Passionate about accessible education and early-stage tech.", email: "priya@edubridge.io", linkedin: "https://linkedin.com/in/priyanair", companywebsite: "https://edubridge.io" },
-  { name: "Sam Osei", role: "Founder", company: "HealthSync", industry: "HealthTech", stage: "Series A", location: "Nairobi", tags: ["HealthTech", "Africa", "Impact"], avatar: "SO", rating: 4.7, views: 156, meetings: 24, available: true, verified: true, bio: "Health tech founder operating across East Africa. 3x exits. Mentor at Techstars Africa.", email: "sam@healthsync.co", linkedin: "https://linkedin.com/in/samosei", companywebsite: "https://healthsync.co" },
-  { name: "Lena Müller", role: "CEO", company: "ClimateOps", industry: "ClimaTech", stage: "Seed", location: "Berlin", tags: ["ClimaTech", "B2B"], avatar: "LM", rating: 4.6, views: 122, meetings: 15, available: true, verified: false, bio: "Climate tech CEO building carbon management tools for enterprise. YC S22 alumni.", email: "lena@climateops.de", linkedin: "https://linkedin.com/in/lenamuller", companywebsite: "https://climateops.de" },
-  { name: "David Kim", role: "Co-founder", company: "CryptoEdge", industry: "Web3", stage: "Pre-seed", location: "Singapore", tags: ["Web3", "DeFi"], avatar: "DK", rating: 4.5, views: 98, meetings: 11, available: false, verified: true, bio: "Web3 builder since 2017. Co-founded 3 blockchain protocols. Deep expertise in DeFi and tokenomics.", email: "david@cryptoedge.io", linkedin: "https://linkedin.com/in/davidkim", companywebsite: "https://cryptoedge.io" },
+  { name: "Bilal Raza", role: "Co-founder & CEO", company: "Founivo", industry: "AI/ML", stage: "Seed", location: "Pakistan", tags: ["AI/ML", "SaaS", "B2B"], avatar: "BR", rating: 4.9, views: 312, meetings: 45, available: true, verified: true, bio: "Building Founivo to connect elite startup founders. Software engineer, passionate about AI agent workflows and product growth.", email: "bilal@founivo.com", linkedin: "https://linkedin.com/in/bilalraza", companywebsite: "https://founivo.com" },
+  { name: "Nehal Raza", role: "Co-founder & CTO", company: "Founivo", industry: "SaaS", stage: "Seed", location: "Pakistan", tags: ["SaaS", "Scaling", "Full Stack"], avatar: "NR", rating: 5.0, views: 284, meetings: 32, available: true, verified: true, bio: "Co-founder & CTO at Founivo. Ex-Software Architect. Passionate about next-gen frontend engineering, database optimization, and web performance.", email: "nehal@founivo.com", linkedin: "https://linkedin.com/in/nehalraza", companywebsite: "https://founivo.com" },
+  { name: "Hamza Sheikh", role: "Founder & CEO", company: "DealFlow", industry: "FinTech", stage: "Pre-seed", location: "Pakistan", tags: ["FinTech", "Payments", "B2B"], avatar: "HS", rating: 4.8, views: 156, meetings: 18, available: true, verified: true, bio: "Fintech innovator building payment infrastructure for businesses in Pakistan. Passionate about financial inclusion.", email: "hamza@dealflow.pk", linkedin: "https://linkedin.com/in/hamzasheikh", companywebsite: "https://dealflow.pk" },
+  { name: "Zainab Khan", role: "Co-founder", company: "HealthAI", industry: "HealthTech", stage: "Seed", location: "Pakistan", tags: ["HealthTech", "AI/ML", "MedTech"], avatar: "ZK", rating: 4.7, views: 197, meetings: 24, available: true, verified: true, bio: "Building AI tools for radiology and diagnostics. Medical researcher turned tech entrepreneur.", email: "zainab@healthai.pk", linkedin: "https://linkedin.com/in/zainabkhan", companywebsite: "https://healthai.pk" },
+  { name: "Sarah Ahmed", role: "Founder", company: "Edubase", industry: "EdTech", stage: "Pre-seed", location: "Pakistan", tags: ["EdTech", "B2C", "E-Learning"], avatar: "SA", rating: 4.6, views: 122, meetings: 15, available: true, verified: true, bio: "Ex-educator building gamified learning environments for local school children. Passionate about primary education.", email: "sarah@edubase.pk", linkedin: "https://linkedin.com/in/sarahahmed", companywebsite: "https://edubase.pk" },
+  { name: "Muhammad Ali", role: "Co-founder & CTO", company: "Web3Space", industry: "Web3", stage: "Seed", location: "Pakistan", tags: ["Web3", "Blockchain", "DeFi"], avatar: "MA", rating: 4.5, views: 98, meetings: 11, available: false, verified: true, bio: "Decentralized applications developer and smart contract auditor. Helping brands transition into the Web3 space.", email: "ali@web3space.io", linkedin: "https://linkedin.com/in/muhammadali", companywebsite: "https://web3space.io" },
 ];
 
 const industries = ["All", "AI/ML", "FinTech", "HealthTech", "EdTech", "Web3", "ClimaTech", "SaaS"];
 const stages = ["All Stages", "Pre-seed", "Seed", "Series A", "Series B+"];
 const locations = ["All Locations", "Pakistan", "United States", "United Kingdom", "Canada", "Germany", "Singapore", "UAE"];
 
-export default function FindFounders() {
+interface FindFoundersProps {
+  savedFounders: string[];
+  toggleSave: (name: string) => void;
+}
+
+export default function FindFounders({ savedFounders, toggleSave }: FindFoundersProps) {
   const [search, setSearch] = useState("");
   const [industry, setIndustry] = useState("All");
   const [stage, setStage] = useState("All Stages");
   const [location, setLocation] = useState("All Locations");
-  const [saved, setSaved] = useState<number[]>([]);
   const [foundersList, setFoundersList] = useState<DashboardFounder[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -323,10 +327,10 @@ export default function FindFounders() {
               </div>
 
               <button 
-                onClick={() => setSaved(saved.includes(i) ? saved.filter(s => s !== i) : [...saved, i])}
+                onClick={() => toggleSave(f.name)}
                 style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}
               >
-                <Bookmark size={15} color={saved.includes(i) ? "var(--primary)" : "var(--text-muted)"} fill={saved.includes(i) ? "var(--primary)" : "none"} />
+                <Bookmark size={15} color={savedFounders.includes(f.name) ? "var(--primary)" : "var(--text-muted)"} fill={savedFounders.includes(f.name) ? "var(--primary)" : "none"} />
               </button>
             </div>
 
