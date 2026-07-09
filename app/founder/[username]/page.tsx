@@ -4,7 +4,7 @@ import {
   ArrowLeft, MapPin, CheckCircle, Star, Mail, Globe, 
   Copy, Check, Loader2, Clock, Calendar, CheckCircle2, 
   ExternalLink, ChevronRight, MessageSquare, AlertCircle, Briefcase, Building, Sparkles, User,
-  Menu, X, Edit3, Camera, Plus, Trash2
+  Menu, X, Camera, Plus, Trash2
 } from "lucide-react";
 import Link from "next/link";
 import { DashboardFounder } from "@/app/lib/googleSheets";
@@ -929,29 +929,7 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
                 )}
               </div>
 
-              {/* Edit / Save controls & verification status */}
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                {editing ? (
-                  <button 
-                    onClick={handleSave}
-                    className="btn-primary"
-                    style={{ height: 36, padding: "0 18px", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}
-                    disabled={saving}
-                  >
-                    {saving ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />}
-                    {saving ? "Saving..." : "Save"}
-                  </button>
-                ) : (
-                  <button 
-                    onClick={() => setEditing(true)}
-                    className="btn-ghost"
-                    style={{ height: 36, padding: "0 18px", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}
-                  >
-                    <Edit3 size={14} />
-                    Edit Profile
-                  </button>
-                )}
-              </div>
+              {/* Edit / Save controls & verification status removed */}
             </div>
           </div>
 
