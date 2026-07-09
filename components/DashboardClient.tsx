@@ -10,6 +10,53 @@ import Settings from "./Settings";
 import Notifications from "./Notifications";
 import { createClient } from "@/app/utils/supabase/client";
 import { Menu, X } from "lucide-react";
+import { DashboardFounder } from "@/app/lib/googleSheets";
+
+interface ProfileMetadata {
+  personal_photo?: string;
+  startup_logo?: string;
+  fees_30m?: string;
+  fees_1h?: string;
+  fees_custom_min?: string;
+  fees_custom_val?: string;
+  skills?: string[];
+  
+  startup_name?: string;
+  startup_stage?: string;
+  startup_category?: string;
+  startup_location?: string;
+  startup_team_size?: string;
+  startup_funding?: string;
+  startup_bio?: string;
+  startup_linkedin?: string;
+  startup_twitter?: string;
+  startup_website?: string;
+}
+
+const parseBioAndMetadata = (rawBio: string): { bioText: string; metadata: ProfileMetadata } => {
+  const marker = "\n\n---METADATA---\n";
+  if (rawBio && rawBio.includes(marker)) {
+    const parts = rawBio.split(marker);
+    const bioText = parts[0];
+    try {
+      const metadata = JSON.parse(parts[1]);
+      return { bioText, metadata };
+    } catch (e) {
+      console.error("Error parsing profile metadata:", e);
+      return { bioText: rawBio, metadata: {} };
+    }
+  }
+  return { bioText: rawBio || "", metadata: {} };
+};
+
+const INITIAL_MOCK_FOUNDERS: DashboardFounder[] = [
+  { name: "Bilal Raza", role: "Co-founder & CEO", company: "Founivo", industry: "AI/ML", stage: "Seed", location: "Pakistan", tags: ["AI/ML", "SaaS", "B2B"], avatar: "BR", rating: 4.9, views: 312, meetings: 45, available: true, verified: true, bio: "Building Founivo to connect elite startup founders. Software engineer, passionate about AI agent workflows and product growth.", email: "bilal@founivo.com", linkedin: "https://linkedin.com/in/bilalraza", companywebsite: "https://founivo.com" },
+  { name: "Nehal Raza", role: "Co-founder & CTO", company: "Founivo", industry: "SaaS", stage: "Seed", location: "Pakistan", tags: ["SaaS", "Scaling", "Full Stack"], avatar: "NR", rating: 5.0, views: 284, meetings: 32, available: true, verified: true, bio: "Co-founder & CTO at Founivo. Ex-Software Architect. Passionate about next-gen frontend engineering, database optimization, and web performance.", email: "nehal@founivo.com", linkedin: "https://linkedin.com/in/nehalraza", companywebsite: "https://founivo.com" },
+  { name: "Hamza Sheikh", role: "Founder & CEO", company: "DealFlow", industry: "FinTech", stage: "Pre-seed", location: "Pakistan", tags: ["FinTech", "Payments", "B2B"], avatar: "HS", rating: 4.8, views: 156, meetings: 18, available: true, verified: true, bio: "Fintech innovator building payment infrastructure for businesses in Pakistan. Passionate about financial inclusion.", email: "hamza@dealflow.pk", linkedin: "https://linkedin.com/in/hamzasheikh", companywebsite: "https://dealflow.pk" },
+  { name: "Zainab Khan", role: "Co-founder", company: "HealthAI", industry: "HealthTech", stage: "Seed", location: "Pakistan", tags: ["HealthTech", "AI/ML", "MedTech"], avatar: "ZK", rating: 4.7, views: 197, meetings: 24, available: true, verified: true, bio: "Building AI tools for radiology and diagnostics. Medical researcher turned tech entrepreneur.", email: "zainab@healthai.pk", linkedin: "https://linkedin.com/in/zainabkhan", companywebsite: "https://healthai.pk" },
+  { name: "Sarah Ahmed", role: "Founder", company: "Edubase", industry: "EdTech", stage: "Pre-seed", location: "Pakistan", tags: ["EdTech", "B2C", "E-Learning"], avatar: "SA", rating: 4.6, views: 122, meetings: 15, available: true, verified: true, bio: "Ex-educator building gamified learning environments for local school children. Passionate about primary education.", email: "sarah@edubase.pk", linkedin: "https://linkedin.com/in/sarahahmed", companywebsite: "https://edubase.pk" },
+  { name: "Muhammad Ali", role: "Co-founder & CTO", company: "Web3Space", industry: "Web3", stage: "Seed", location: "Pakistan", tags: ["Web3", "Blockchain", "DeFi"], avatar: "MA", rating: 4.5, views: 98, meetings: 11, available: false, verified: true, bio: "Decentralized applications developer and smart contract auditor. Helping brands transition into the Web3 space.", email: "ali@web3space.io", linkedin: "https://linkedin.com/in/muhammadali", companywebsite: "https://web3space.io" },
+];
 
 export const themes: Record<string, Record<string, string>> = {
   emerald: { primary: '#0F6E56', dark: '#0a5441', light: '#12856a', xlight: '#e6f4f1', p50: '#f0faf7', p100: '#d1ede6', p200: '#a3dbcd' },
@@ -56,6 +103,84 @@ export default function DashboardClient() {
       return next;
     });
   };
+
+  // Unified founders list state loaded once at the parent level
+  const [foundersList, setFoundersList] = useState<DashboardFounder[]>([]);
+  const [foundersLoading, setFoundersLoading] = useState(true);
+
+  useEffect(() => {
+    if (syncing) return;
+
+    const sheetUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_CSV_URL;
+
+    const loadFounders = async () => {
+      setFoundersLoading(true);
+      let sheetsFounders: DashboardFounder[] = [];
+      let dbMappedFounders: DashboardFounder[] = [];
+
+      try {
+        const { data: dbFounders } = await supabase
+          .from("founder_profiles")
+          .select("*");
+        
+        if (dbFounders) {
+          dbMappedFounders = dbFounders.map((f: any) => {
+            const { bioText, metadata: parsed } = parseBioAndMetadata(f.bio || "");
+            return {
+              name: f.full_name,
+              role: f.role || "Founder",
+              company: f.company || parsed.startup_name || "Stealth Startup",
+              industry: parsed.startup_category || f.category || "AI/ML",
+              stage: parsed.startup_stage || "Seed",
+              location: parsed.startup_location || "Pakistan",
+              tags: parsed.skills || ["Founder", "Tech Startup"],
+              avatar: parsed.personal_photo || f.full_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
+              rating: 4.9,
+              views: 142,
+              meetings: 0,
+              available: true,
+              verified: true,
+              bio: bioText,
+              email: "founder-contact@founivo.io",
+              linkedin: f.linkedin || parsed.startup_linkedin || "",
+              companywebsite: f.website || parsed.startup_website || ""
+            };
+          });
+        }
+      } catch (err) {
+        console.error("Failed to query live database profiles:", err);
+      }
+
+      try {
+        if (sheetUrl) {
+          const { fetchFoundersFromGoogleSheet } = await import("@/app/lib/googleSheets");
+          const data = await fetchFoundersFromGoogleSheet(sheetUrl);
+          if (data && data.length > 0) {
+            sheetsFounders = data;
+          }
+        } else {
+          sheetsFounders = INITIAL_MOCK_FOUNDERS;
+        }
+      } catch (err) {
+        console.error("Failed to load Google Sheet, using mock data.", err);
+        sheetsFounders = INITIAL_MOCK_FOUNDERS;
+      }
+
+      const mergedList = [...dbMappedFounders];
+      sheetsFounders.forEach(sf => {
+        const nameSlug = getSlug(sf.name);
+        const exists = dbMappedFounders.some(dbf => getSlug(dbf.name) === nameSlug);
+        if (!exists) {
+          mergedList.push(sf);
+        }
+      });
+
+      setFoundersList(mergedList);
+      setFoundersLoading(false);
+    };
+
+    loadFounders();
+  }, [syncing, supabase]);
 
   // Read initial tab parameter from URL if present
   useEffect(() => {
@@ -147,13 +272,13 @@ export default function DashboardClient() {
   const renderTabContent = () => {
     switch (activeTab) {
       case "discover":
-        return <Discover savedFounders={savedFounders} toggleSave={toggleSave} />;
+        return <Discover savedFounders={savedFounders} toggleSave={toggleSave} foundersList={foundersList} loading={foundersLoading} />;
       case "search":
-        return <FindFounders savedFounders={savedFounders} toggleSave={toggleSave} />;
+        return <FindFounders savedFounders={savedFounders} toggleSave={toggleSave} foundersList={foundersList} loading={foundersLoading} />;
       case "messages":
         return <Messages />;
       case "saved":
-        return <Saved savedFounders={savedFounders} toggleSave={toggleSave} />;
+        return <Saved savedFounders={savedFounders} toggleSave={toggleSave} foundersList={foundersList} loading={foundersLoading} />;
       case "billing":
         return <Billing />;
       case "settings":
@@ -161,7 +286,7 @@ export default function DashboardClient() {
       case "notifications":
         return <Notifications />;
       default:
-        return <Discover savedFounders={savedFounders} toggleSave={toggleSave} />;
+        return <Discover savedFounders={savedFounders} toggleSave={toggleSave} foundersList={foundersList} loading={foundersLoading} />;
     }
   };
 

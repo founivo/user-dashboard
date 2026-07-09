@@ -63,93 +63,15 @@ const locations = ["All Locations", "Pakistan", "United States", "United Kingdom
 interface FindFoundersProps {
   savedFounders: string[];
   toggleSave: (name: string) => void;
+  foundersList: DashboardFounder[];
+  loading: boolean;
 }
 
-export default function FindFounders({ savedFounders, toggleSave }: FindFoundersProps) {
+export default function FindFounders({ savedFounders, toggleSave, foundersList, loading }: FindFoundersProps) {
   const [search, setSearch] = useState("");
   const [industry, setIndustry] = useState("All");
   const [stage, setStage] = useState("All Stages");
   const [location, setLocation] = useState("All Locations");
-  const [foundersList, setFoundersList] = useState<DashboardFounder[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const supabase = createClient();
-
-  useEffect(() => {
-    const sheetUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_CSV_URL;
-
-    const loadFounders = async () => {
-      setLoading(true);
-      let sheetsFounders: DashboardFounder[] = [];
-      let dbMappedFounders: DashboardFounder[] = [];
-
-      // 1. Fetch live founder_profiles from Supabase
-      try {
-        const { data: dbFounders } = await supabase
-          .from("founder_profiles")
-          .select("*");
-        
-        if (dbFounders) {
-          dbMappedFounders = dbFounders.map((f: any) => {
-            const { bioText, metadata: parsed } = parseBioAndMetadata(f.bio || "");
-            return {
-              name: f.full_name,
-              role: f.role || "Founder",
-              company: f.company || parsed.startup_name || "Stealth Startup",
-              industry: parsed.startup_category || f.category || "AI/ML",
-              stage: parsed.startup_stage || "Seed",
-              location: parsed.startup_location || "Pakistan",
-              tags: parsed.skills || ["Founder", "Tech Startup"],
-              avatar: parsed.personal_photo || f.full_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
-              rating: 4.9,
-              views: 142,
-              meetings: 0,
-              available: true,
-              verified: true,
-              bio: bioText,
-              email: "founder-contact@founivo.io",
-              linkedin: f.linkedin || parsed.startup_linkedin || "",
-              companywebsite: f.website || parsed.startup_website || ""
-            };
-          });
-        }
-      } catch (err) {
-        console.error("Failed to query live database profiles:", err);
-      }
-
-      // 2. Fetch mock founders from Google Sheet or Local Backup
-      try {
-        if (sheetUrl) {
-          const { fetchFoundersFromGoogleSheet } = await import("@/app/lib/googleSheets");
-          const data = await fetchFoundersFromGoogleSheet(sheetUrl);
-          if (data && data.length > 0) {
-            sheetsFounders = data;
-          }
-        } else {
-          sheetsFounders = INITIAL_MOCK_FOUNDERS;
-        }
-      } catch (err) {
-        console.error("Failed to load Google Sheet, using local mock data.", err);
-        sheetsFounders = INITIAL_MOCK_FOUNDERS;
-      }
-
-      // 3. Merge & Deduplicate (Preclude Sheets profiles if name matches a live DB record)
-      const mergedList = [...dbMappedFounders];
-      
-      sheetsFounders.forEach(sf => {
-        const nameSlug = getSlug(sf.name);
-        const exists = dbMappedFounders.some(dbf => getSlug(dbf.name) === nameSlug);
-        if (!exists) {
-          mergedList.push(sf);
-        }
-      });
-
-      setFoundersList(mergedList);
-      setLoading(false);
-    };
-
-    loadFounders();
-  }, []);
 
   const filtered = foundersList.filter(f => {
     const matchSearch = !search || 

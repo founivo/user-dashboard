@@ -55,68 +55,11 @@ const INITIAL_MOCK_FOUNDERS: DashboardFounder[] = [
 interface SavedProps {
   savedFounders: string[];
   toggleSave: (name: string) => void;
+  foundersList: DashboardFounder[];
+  loading: boolean;
 }
 
-export default function Saved({ savedFounders, toggleSave }: SavedProps) {
-  const [foundersList, setFoundersList] = useState<DashboardFounder[]>([]);
-  const [loading, setLoading] = useState(false);
-  const supabase = createClient();
-
-  useEffect(() => {
-    const loadFounders = async () => {
-      setLoading(true);
-      let dbMappedFounders: DashboardFounder[] = [];
-
-      try {
-        const { data: dbFounders } = await supabase
-          .from("founder_profiles")
-          .select("*");
-        
-        if (dbFounders) {
-          dbMappedFounders = dbFounders.map((f: any) => {
-            const { bioText, metadata: parsed } = parseBioAndMetadata(f.bio || "");
-            return {
-              name: f.full_name,
-              role: f.role || "Founder",
-              company: f.company || parsed.startup_name || "Stealth Startup",
-              industry: parsed.startup_category || f.category || "AI/ML",
-              stage: parsed.startup_stage || "Seed",
-              location: parsed.startup_location || "Pakistan",
-              tags: parsed.skills || ["Founder", "Tech Startup"],
-              avatar: parsed.personal_photo || f.full_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
-              rating: 4.9,
-              views: 142,
-              meetings: 0,
-              available: true,
-              verified: true,
-              bio: bioText,
-              email: "founder-contact@founivo.io",
-              linkedin: f.linkedin || parsed.startup_linkedin || "",
-              companywebsite: f.website || parsed.startup_website || ""
-            };
-          });
-        }
-      } catch (err) {
-        console.error("Failed to query live database profiles:", err);
-      }
-
-      // Merge Supabase DB profiles with INITIAL_MOCK_FOUNDERS
-      const mergedList = [...dbMappedFounders];
-      INITIAL_MOCK_FOUNDERS.forEach(sf => {
-        const nameSlug = getSlug(sf.name);
-        const exists = dbMappedFounders.some(dbf => getSlug(dbf.name) === nameSlug);
-        if (!exists) {
-          mergedList.push(sf);
-        }
-      });
-
-      setFoundersList(mergedList);
-      setLoading(false);
-    };
-
-    loadFounders();
-  }, [supabase]);
-
+export default function Saved({ savedFounders, toggleSave, foundersList, loading }: SavedProps) {
   // Construct saved list by mapping saved slugs to profiles (with mock fallback lookup)
   const savedList: DashboardFounder[] = [];
   savedFounders.forEach(slug => {

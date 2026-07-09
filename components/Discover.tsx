@@ -1,51 +1,13 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { 
   Search, TrendingUp, Star, Zap, ArrowRight, Eye, 
   MessageSquare, Bookmark, ChevronRight, CheckCircle, 
   MapPin, Bot, CreditCard, Activity, BookOpen, Settings, Link as LinkIcon, Loader2
 } from "lucide-react";
-import { createClient } from "@/app/utils/supabase/client";
 import Link from "next/link";
 import { getSlug } from "./FindFounders";
 import { DashboardFounder } from "@/app/lib/googleSheets";
-
-interface ProfileMetadata {
-  personal_photo?: string;
-  startup_logo?: string;
-  fees_30m?: string;
-  fees_1h?: string;
-  fees_custom_min?: string;
-  fees_custom_val?: string;
-  skills?: string[];
-  
-  startup_name?: string;
-  startup_stage?: string;
-  startup_category?: string;
-  startup_location?: string;
-  startup_team_size?: string;
-  startup_funding?: string;
-  startup_bio?: string;
-  startup_linkedin?: string;
-  startup_twitter?: string;
-  startup_website?: string;
-}
-
-const parseBioAndMetadata = (rawBio: string): { bioText: string; metadata: ProfileMetadata } => {
-  const marker = "\n\n---METADATA---\n";
-  if (rawBio && rawBio.includes(marker)) {
-    const parts = rawBio.split(marker);
-    const bioText = parts[0];
-    try {
-      const metadata = JSON.parse(parts[1]);
-      return { bioText, metadata };
-    } catch (e) {
-      console.error("Error parsing profile metadata:", e);
-      return { bioText: rawBio, metadata: {} };
-    }
-  }
-  return { bioText: rawBio || "", metadata: {} };
-};
 
 const featured = [
   { 
@@ -61,16 +23,16 @@ const featured = [
     bio: "Co-founder & CTO at Founivo. Ex-Software Architect. Passionate about next-gen frontend engineering, database optimization, and web performance."
   },
   { 
-    name: "Hamza Sheikh", role: "Founder & CEO", company: "DealFlow", 
-    tags: ["FinTech", "B2B"], stage: "Pre-seed", location: "Pakistan",
-    avatar: "HS", rating: 4.8, meetings: 18, views: 156, available: true, verified: true,
-    bio: "Fintech innovator building payment infrastructure for businesses in Pakistan. Passionate about financial inclusion."
+    name: "Inam Ali Soomro", role: "Founder", company: "Inbyotech", 
+    tags: ["Web Dev", "Solutions"], stage: "Est. 2024", location: "Pakistan",
+    avatar: "IS", rating: 4.9, meetings: 15, views: 122, available: true, verified: true,
+    bio: "Innovative Software Solutions, Web Development & Digital Services."
   },
   { 
-    name: "Zainab Khan", role: "Co-founder", company: "HealthAI", 
-    tags: ["HealthTech", "AI/ML"], stage: "Seed", location: "Pakistan",
-    avatar: "ZK", rating: 4.7, meetings: 24, views: 197, available: true, verified: true,
-    bio: "Building AI tools for radiology and diagnostics. Medical researcher turned tech entrepreneur."
+    name: "Umer Siddiqui", role: "Founder", company: "Paragon Digital Solutions", 
+    tags: ["Ecommerce", "Webapp"], stage: "Est. 2024", location: "Pakistan",
+    avatar: "US", rating: 4.8, meetings: 12, views: 98, available: true, verified: true,
+    bio: "Ecommerce Development, Webapp Development, Website Development, Website Revamp, SEO, Digital Marketing, SMM, and UI/UX Design"
   },
 ];
 
@@ -86,55 +48,12 @@ const categories = [
 interface DiscoverProps {
   savedFounders: string[];
   toggleSave: (name: string) => void;
+  foundersList: DashboardFounder[];
+  loading: boolean;
 }
 
-export default function Discover({ savedFounders, toggleSave }: DiscoverProps) {
+export default function Discover({ savedFounders, toggleSave, foundersList, loading }: DiscoverProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [foundersList, setFoundersList] = useState<DashboardFounder[]>([]);
-  const supabase = createClient();
-
-  useEffect(() => {
-    const loadFounders = async () => {
-      let dbMappedFounders: DashboardFounder[] = [];
-
-      try {
-        const { data: dbFounders } = await supabase
-          .from("founder_profiles")
-          .select("*");
-        
-        if (dbFounders) {
-          dbMappedFounders = dbFounders.map((f: any) => {
-            const { bioText, metadata: parsed } = parseBioAndMetadata(f.bio || "");
-            return {
-              name: f.full_name,
-              role: f.role || "Founder",
-              company: f.company || parsed.startup_name || "Stealth Startup",
-              industry: parsed.startup_category || f.category || "AI/ML",
-              stage: parsed.startup_stage || "Seed",
-              location: parsed.startup_location || "Pakistan",
-              tags: parsed.skills || ["Founder", "Tech Startup"],
-              avatar: parsed.personal_photo || f.full_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
-              rating: 4.9,
-              views: 142,
-              meetings: 0,
-              available: true,
-              verified: true,
-              bio: bioText,
-              email: "founder-contact@founivo.io",
-              linkedin: f.linkedin || parsed.startup_linkedin || "",
-              companywebsite: f.website || parsed.startup_website || ""
-            };
-          });
-        }
-      } catch (err) {
-        console.error("Failed to query live database profiles:", err);
-      }
-
-      setFoundersList(dbMappedFounders);
-    };
-
-    loadFounders();
-  }, [supabase]);
 
   // Merge live database/sheets attributes with the featured mock array items (especially custom uploaded avatars)
   const featuredList = featured.map(feat => {
