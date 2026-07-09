@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, use, useRef } from "react";
 import { 
-  ArrowLeft, MapPin, CheckCircle, Star, Mail, Globe, 
+  ArrowLeft, MapPin, CheckCircle, Star, Mail, Globe, Eye, 
   Copy, Check, Loader2, Clock, Calendar, CheckCircle2, 
   ExternalLink, ChevronRight, MessageSquare, AlertCircle, Briefcase, Building, Sparkles, User,
   Menu, X, Camera, Plus, Trash2
@@ -907,7 +907,7 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
                 </div>
                 
                 {activeTab === "personal" ? (
-                  <p style={{ color: "var(--text-secondary)", fontSize: 14, marginTop: 6, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
+                  <p style={{ color: "var(--text-secondary)", fontSize: 14, marginTop: 6, fontWeight: 500, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                     <Briefcase size={14} color="var(--primary)" />
                     {editing ? (
                       <input 
@@ -918,7 +918,17 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
                       />
                     ) : (
                       role
-                    )} @ <span style={{ fontWeight: 700, color: "var(--text)" }}>{startupName}</span>
+                    )}
+                    {startupLogo && (startupLogo.startsWith("data:image") || startupLogo.startsWith("http")) ? (
+                      <img 
+                        src={startupLogo} 
+                        style={{ width: 16, height: 16, borderRadius: 4, objectFit: "cover", display: "inline-block", verticalAlign: "middle", margin: "0 2px" }} 
+                        alt="Startup Logo" 
+                      />
+                    ) : (
+                      " @ "
+                    )}
+                    <span style={{ fontWeight: 700, color: "var(--text)" }}>{startupName}</span>
                   </p>
                 ) : (
                   <p style={{ color: "var(--text-secondary)", fontSize: 14, marginTop: 6, fontWeight: 500, display: "flex", alignItems: "center", gap: 12 }}>
@@ -929,7 +939,29 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
                 )}
               </div>
 
-              {/* Edit / Save controls & verification status removed */}
+              {/* Rating & Views in Header space */}
+              <div style={{ display: "flex", alignItems: "center", gap: 16, flexShrink: 0, paddingLeft: 12 }}>
+                {/* Rating */}
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 50 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#f59e0b" }}>
+                    <Star size={16} fill="#f59e0b" />
+                    <span style={{ fontSize: 15, fontWeight: 800 }}>{founder.rating || 4.9}</span>
+                  </div>
+                  <span style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{founder.meetings || 0} calls</span>
+                </div>
+                
+                {/* Divider line */}
+                <div style={{ width: 1, height: 28, background: "var(--border)" }} />
+                
+                {/* Views */}
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 50 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--text-secondary)" }}>
+                    <Eye size={16} />
+                    <span style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>{founder.views || 142}</span>
+                  </div>
+                  <span style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>views</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1354,7 +1386,31 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
             {/* RIGHT AREA: SIDEBAR CONTACT DETAILS */}
             <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
               
-              {/* SOCIAL / CONNECTIONS CARD */}
+              {/* DIRECT CONTACT PANEL (EMAIL AT TOP) */}
+              <div className="card">
+                <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>Verified Contacts</h3>
+                
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {/* Email row */}
+                  <div style={{ padding: "12px 14px", background: "var(--bg-soft)", border: "1px solid var(--border)", borderRadius: 12, display: "flex", alignItems: "center", gap: 10 }}>
+                    <Mail size={16} color="var(--primary)" style={{ flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 10, color: "var(--text-secondary)", textTransform: "uppercase", fontWeight: 700 }}>Email Address</div>
+                      <div style={{ fontSize: 13, color: "var(--text)", fontWeight: 600, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", marginTop: 2 }}>
+                        {founder.email || "founder-contact@founivo.io"}
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => handleCopy(founder.email || "founder-contact@founivo.io", 'email')}
+                      style={{ background: "none", border: "none", color: "var(--primary)", fontSize: 11, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}
+                    >
+                      {copiedText === 'email' ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* SOCIAL / CONNECTIONS CARD (BELOW EMAIL) */}
               <div className="card">
                 <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>
                   {activeTab === "personal" ? "Founder Connections" : "Startup Links"}
@@ -1448,44 +1504,6 @@ export default function FounderProfilePage({ params }: FounderPageProps) {
                       })}
                     </div>
                   )}
-                </div>
-              </div>
-
-              {/* DIRECT CONTACT PANEL */}
-              <div className="card">
-                <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>Verified Contacts</h3>
-                
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  
-                  {/* Email row */}
-                  <div style={{ padding: "12px 14px", background: "var(--bg-soft)", border: "1px solid var(--border)", borderRadius: 12, display: "flex", alignItems: "center", gap: 10 }}>
-                    <Mail size={16} color="var(--primary)" style={{ flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 10, color: "var(--text-secondary)", textTransform: "uppercase", fontWeight: 700 }}>Email Address</div>
-                      <div style={{ fontSize: 13, color: "var(--text)", fontWeight: 600, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", marginTop: 2 }}>
-                        {founder.email || "founder-contact@founivo.io"}
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => handleCopy(founder.email || "founder-contact@founivo.io", 'email')}
-                      style={{ background: "none", border: "none", color: "var(--primary)", fontSize: 11, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}
-                    >
-                      {copiedText === 'email' ? 'Copied!' : 'Copy'}
-                    </button>
-                  </div>
-
-                  {/* Rating views summary */}
-                  <div style={{ padding: "12px 14px", border: "1px solid var(--border)", borderRadius: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, color: "var(--text-secondary)" }}>
-                      <span>Rating Score:</span>
-                      <strong style={{ color: "var(--text)" }}>★ {founder.rating} ({founder.meetings} bookings)</strong>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, color: "var(--text-secondary)" }}>
-                      <span>Profile Views:</span>
-                      <strong style={{ color: "var(--text)" }}>{founder.views}</strong>
-                    </div>
-                  </div>
-
                 </div>
               </div>
 
