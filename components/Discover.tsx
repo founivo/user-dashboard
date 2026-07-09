@@ -8,6 +8,44 @@ import {
 import { createClient } from "@/app/utils/supabase/client";
 import Link from "next/link";
 import { getSlug } from "./FindFounders";
+import { DashboardFounder } from "@/app/lib/googleSheets";
+
+interface ProfileMetadata {
+  personal_photo?: string;
+  startup_logo?: string;
+  fees_30m?: string;
+  fees_1h?: string;
+  fees_custom_min?: string;
+  fees_custom_val?: string;
+  skills?: string[];
+  
+  startup_name?: string;
+  startup_stage?: string;
+  startup_category?: string;
+  startup_location?: string;
+  startup_team_size?: string;
+  startup_funding?: string;
+  startup_bio?: string;
+  startup_linkedin?: string;
+  startup_twitter?: string;
+  startup_website?: string;
+}
+
+const parseBioAndMetadata = (rawBio: string): { bioText: string; metadata: ProfileMetadata } => {
+  const marker = "\n\n---METADATA---\n";
+  if (rawBio && rawBio.includes(marker)) {
+    const parts = rawBio.split(marker);
+    const bioText = parts[0];
+    try {
+      const metadata = JSON.parse(parts[1]);
+      return { bioText, metadata };
+    } catch (e) {
+      console.error("Error parsing profile metadata:", e);
+      return { bioText: rawBio, metadata: {} };
+    }
+  }
+  return { bioText: rawBio || "", metadata: {} };
+};
 
 const featured = [
   { 
@@ -52,6 +90,93 @@ interface DiscoverProps {
 
 export default function Discover({ savedFounders, toggleSave }: DiscoverProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [foundersList, setFoundersList] = useState<DashboardFounder[]>([]);
+  const supabase = createClient();
+
+  useEffect(() => {
+    const sheetUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_CSV_URL;
+
+    const loadFounders = async () => {
+      let sheetsFounders: DashboardFounder[] = [];
+      let dbMappedFounders: DashboardFounder[] = [];
+
+      try {
+        const { data: dbFounders } = await supabase
+          .from("founder_profiles")
+          .select("*");
+        
+        if (dbFounders) {
+          dbMappedFounders = dbFounders.map((f: any) => {
+            const { bioText, metadata: parsed } = parseBioAndMetadata(f.bio || "");
+            return {
+              name: f.full_name,
+              role: f.role || "Founder",
+              company: f.company || parsed.startup_name || "Stealth Startup",
+              industry: parsed.startup_category || f.category || "AI/ML",
+              stage: parsed.startup_stage || "Seed",
+              location: parsed.startup_location || "Pakistan",
+              tags: parsed.skills || ["Founder", "Tech Startup"],
+              avatar: parsed.personal_photo || f.full_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
+              rating: 4.9,
+              views: 142,
+              meetings: 0,
+              available: true,
+              verified: true,
+              bio: bioText,
+              email: "founder-contact@founivo.io",
+              linkedin: f.linkedin || parsed.startup_linkedin || "",
+              companywebsite: f.website || parsed.startup_website || ""
+            };
+          });
+        }
+      } catch (err) {
+        console.error("Failed to query live database profiles:", err);
+      }
+
+      try {
+        if (sheetUrl) {
+          const { fetchFoundersFromGoogleSheet } = await import("@/app/lib/googleSheets");
+          const data = await fetchFoundersFromGoogleSheet(sheetUrl);
+          if (data && data.length > 0) {
+            sheetsFounders = data;
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load Google Sheet, using fallback.", err);
+      }
+
+      const mergedList = [...dbMappedFounders];
+      sheetsFounders.forEach(sf => {
+        const nameSlug = getSlug(sf.name);
+        const exists = dbMappedFounders.some(dbf => getSlug(dbf.name) === nameSlug);
+        if (!exists) {
+          mergedList.push(sf);
+        }
+      });
+
+      setFoundersList(mergedList);
+    };
+
+    loadFounders();
+  }, [supabase]);
+
+  // Merge live database/sheets attributes with the featured mock array items (especially custom uploaded avatars)
+  const featuredList = featured.map(feat => {
+    const live = foundersList.find(f => getSlug(f.name) === getSlug(feat.name));
+    if (live) {
+      return {
+        ...feat,
+        avatar: live.avatar,
+        role: live.role,
+        company: live.company,
+        bio: live.bio,
+        tags: live.tags,
+        location: live.location,
+        stage: live.stage
+      };
+    }
+    return feat;
+  });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 32 }} className="fade-in">
@@ -99,11 +224,27 @@ export default function Discover({ savedFounders, toggleSave }: DiscoverProps) {
         
         {/* Responsive Grid instead of pure horizontal scroll */}
         <div className="founders-grid">
-          {featured.map((f, i) => (
+          {featuredList.map((f, i) => (
             <div key={i} className="founder-compact-card">
               <div style={{ display: "flex", gap: 12, alignItems: "start" }}>
                 <div style={{ position: "relative", flexShrink: 0 }}>
-                  <div className="avatar" style={{ width: 44, height: 44, fontSize: 14, background: "linear-gradient(135deg, var(--primary), var(--primary-light))" }}>{f.avatar}</div>
+                  <div 
+                    className="avatar" 
+                    style={{ 
+                      width: 44, 
+                      height: 44, 
+                      fontSize: 14, 
+                      background: "linear-gradient(135deg, var(--primary), var(--primary-light))",
+                      position: "relative",
+                      overflow: "hidden"
+                    }}
+                  >
+                    {f.avatar && (f.avatar.startsWith("data:image") || f.avatar.startsWith("http")) ? (
+                      <img src={f.avatar} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt={f.name} />
+                    ) : (
+                      f.avatar
+                    )}
+                  </div>
                   {f.available && <div style={{ position: "absolute", bottom: 0, right: 0, width: 12, height: 12, background: "var(--primary)", borderRadius: "50%", border: "2px solid white" }} />}
                 </div>
 
@@ -123,7 +264,7 @@ export default function Discover({ savedFounders, toggleSave }: DiscoverProps) {
                   onClick={() => toggleSave(f.name)}
                   style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}
                 >
-                  <Bookmark size={15} color={savedFounders.includes(f.name) ? "var(--primary)" : "var(--text-muted)"} fill={savedFounders.includes(f.name) ? "var(--primary)" : "none"} />
+                  <Bookmark size={15} color={savedFounders.includes(getSlug(f.name)) ? "var(--primary)" : "var(--text-muted)"} fill={savedFounders.includes(getSlug(f.name)) ? "var(--primary)" : "none"} />
                 </button>
               </div>
 

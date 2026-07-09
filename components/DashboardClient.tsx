@@ -43,9 +43,15 @@ export default function DashboardClient() {
     }
   }, []);
 
+  // Helper to generate URL-friendly slugs/usernames from name
+  const getSlug = (name: string): string => {
+    return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  };
+
   const toggleSave = (name: string) => {
+    const slug = getSlug(name);
     setSavedFounders(prev => {
-      const next = prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name];
+      const next = prev.includes(slug) ? prev.filter(s => s !== slug) : [...prev, slug];
       localStorage.setItem("founivo-saved-founders", JSON.stringify(next));
       return next;
     });

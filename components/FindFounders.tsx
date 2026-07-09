@@ -330,7 +330,7 @@ export default function FindFounders({ savedFounders, toggleSave }: FindFounders
                 onClick={() => toggleSave(f.name)}
                 style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}
               >
-                <Bookmark size={15} color={savedFounders.includes(f.name) ? "var(--primary)" : "var(--text-muted)"} fill={savedFounders.includes(f.name) ? "var(--primary)" : "none"} />
+                <Bookmark size={15} color={savedFounders.includes(getSlug(f.name)) ? "var(--primary)" : "var(--text-muted)"} fill={savedFounders.includes(getSlug(f.name)) ? "var(--primary)" : "none"} />
               </button>
             </div>
 
